@@ -1,7 +1,9 @@
 part of 'main.dart';
 
 class SmartifyApp extends StatelessWidget {
-  const SmartifyApp({super.key});
+  const SmartifyApp({super.key, this.foodRepository});
+
+  final FoodRepository? foodRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -24,13 +26,15 @@ class SmartifyApp extends StatelessWidget {
           margin: EdgeInsets.zero,
         ),
       ),
-      home: const SmartifyShell(),
+      home: SmartifyShell(foodRepository: foodRepository),
     );
   }
 }
 
 class SmartifyShell extends StatefulWidget {
-  const SmartifyShell({super.key});
+  const SmartifyShell({super.key, this.foodRepository});
+
+  final FoodRepository? foodRepository;
 
   @override
   State<SmartifyShell> createState() => _SmartifyShellState();
@@ -38,40 +42,103 @@ class SmartifyShell extends StatefulWidget {
 
 class _SmartifyShellState extends State<SmartifyShell> {
   int _selectedIndex = 0;
-  final List<FoodItem> _foods = List.of(demoFoods);
+  late final FoodRepository _repository;
+  List<FoodItem> _foods = [];
+  bool _loading = true;
+  bool _busy = false;
+  String? _loadError;
 
-  void _removeFood(FoodItem food, String outcome) {
-    setState(() => _foods.remove(food));
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text('${food.name} marked as $outcome'),
-          action: SnackBarAction(
-            label: 'UNDO',
-            onPressed: () => setState(() => _foods.add(food)),
-          ),
-        ),
-      );
+  @override
+  void initState() {
+    super.initState();
+    _repository = widget.foodRepository ?? InMemoryFoodRepository();
+    _loadFoods();
   }
 
-  void _addDemoFood() {
-    const newFood = FoodItem(
-      name: 'Fresh strawberries',
-      emoji: '🍓',
-      quantity: '1 box',
-      daysLeft: 4,
-      price: 5.20,
-      priority: FoodPriority.soon,
-      category: 'Produce',
-    );
+  Future<void> _loadFoods() async {
     setState(() {
-      if (!_foods.any((food) => food.name == newFood.name)) {
-        _foods.add(newFood);
-      }
+      _loading = true;
+      _loadError = null;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Strawberries added to your fridge')),
+    try {
+      final foods = await _repository.getFoods();
+      if (mounted) setState(() => _foods = foods);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _loadError = 'Could not load foods. Please retry.');
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _changeFoods(
+    Future<void> Function() change,
+    String message, {
+    VoidCallback? undo,
+  }) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await change();
+      if (!mounted) return;
+      await _loadFoods();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(message),
+            action: undo == null
+                ? null
+                : SnackBarAction(label: 'UNDO', onPressed: undo),
+          ),
+        );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not save the change. Please retry.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _removeFood(FoodItem food, String outcome) {
+    _changeFoods(
+      () => _repository.deleteFood(food.id),
+      '${food.name} marked as $outcome',
+      undo: () => _changeFoods(
+        () => _repository.addFood(food),
+        '${food.name} restored',
+      ),
+    );
+  }
+
+  Future<void> _addFood() async {
+    final entry = await showDialog<({String name, String quantity})>(
+      context: context,
+      builder: (_) => const _AddFoodDialog(),
+    );
+    if (entry == null || !mounted) return;
+    final name = entry.name;
+    final quantity = entry.quantity;
+    final food = FoodItem(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      name: name,
+      emoji: '🥑',
+      quantity: quantity.isEmpty ? '1 item' : quantity,
+      daysLeft: 7,
+      price: 0,
+      priority: FoodPriority.later,
+      category: 'Other',
+    );
+    await _changeFoods(
+      () => _repository.addFood(food),
+      '$name added to your fridge',
     );
   }
 
@@ -91,11 +158,28 @@ class _SmartifyShellState extends State<SmartifyShell> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: IndexedStack(index: _selectedIndex, children: pages),
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _loadError != null
+            ? Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_loadError!),
+                    TextButton(
+                      onPressed: _loadFoods,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              )
+            : IndexedStack(index: _selectedIndex, children: pages),
       ),
       floatingActionButton: _selectedIndex == 1
           ? FloatingActionButton.extended(
-              onPressed: _addDemoFood,
+              onPressed: _busy || _loading || _loadError != null
+                  ? null
+                  : _addFood,
               icon: const Icon(Icons.add_rounded),
               label: const Text('Add food'),
             )
@@ -127,6 +211,71 @@ class _SmartifyShellState extends State<SmartifyShell> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AddFoodDialog extends StatefulWidget {
+  const _AddFoodDialog();
+
+  @override
+  State<_AddFoodDialog> createState() => _AddFoodDialogState();
+}
+
+class _AddFoodDialogState extends State<_AddFoodDialog> {
+  final _name = TextEditingController();
+  final _quantity = TextEditingController(text: '1 item');
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _quantity.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add food'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _name,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Food name'),
+              validator: (value) => value == null || value.trim().isEmpty
+                  ? 'Enter a food name'
+                  : null,
+            ),
+            TextFormField(
+              controller: _quantity,
+              decoration: const InputDecoration(labelText: 'Quantity'),
+            ),
+            const Text('For now, new foods use a 7-day estimate and no price.'),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () {
+            if (_formKey.currentState!.validate()) {
+              Navigator.pop(context, (
+                name: _name.text.trim(),
+                quantity: _quantity.text.trim(),
+              ));
+            }
+          },
+          child: const Text('Add'),
+        ),
+      ],
     );
   }
 }
