@@ -119,26 +119,33 @@ class _SmartifyShellState extends State<SmartifyShell> {
   }
 
   Future<void> _addFood() async {
-    final entry = await showDialog<({String name, String quantity})>(
-      context: context,
-      builder: (_) => const _AddFoodDialog(),
-    );
+    final entry =
+        await showDialog<
+          ({String name, String quantity, double price, int daysLeft})
+        >(context: context, builder: (_) => const _AddFoodDialog());
+
     if (entry == null || !mounted) return;
-    final name = entry.name;
-    final quantity = entry.quantity;
+
+    final priority = entry.daysLeft <= 2
+        ? FoodPriority.first
+        : entry.daysLeft <= 5
+        ? FoodPriority.soon
+        : FoodPriority.later;
+
     final food = FoodItem(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
-      name: name,
+      name: entry.name,
       emoji: '🥑',
-      quantity: quantity.isEmpty ? '1 item' : quantity,
-      daysLeft: 7,
-      price: 0,
-      priority: FoodPriority.later,
+      quantity: entry.quantity,
+      daysLeft: entry.daysLeft,
+      price: entry.price,
+      priority: priority,
       category: 'Other',
     );
+
     await _changeFoods(
       () => _repository.addFood(food),
-      '$name added to your fridge',
+      '${entry.name} added to your fridge',
     );
   }
 
@@ -151,7 +158,7 @@ class _SmartifyShellState extends State<SmartifyShell> {
         onViewRecipes: () => setState(() => _selectedIndex = 2),
       ),
       InventoryPage(foods: _foods, onRemove: _removeFood),
-      RecipesPage(foods: _foods),
+      RecipesPage(foods: _foods, active: _selectedIndex == 2),
       const InsightsPage(),
     ];
 
@@ -225,38 +232,137 @@ class _AddFoodDialog extends StatefulWidget {
 class _AddFoodDialogState extends State<_AddFoodDialog> {
   final _name = TextEditingController();
   final _quantity = TextEditingController(text: '1 item');
+  final _price = TextEditingController(text: '0.00');
+  final _daysLeft = TextEditingController(text: '7');
   final _formKey = GlobalKey<FormState>();
 
   @override
   void dispose() {
     _name.dispose();
     _quantity.dispose();
+    _price.dispose();
+    _daysLeft.dispose();
     super.dispose();
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+
+    Navigator.pop(context, (
+      name: _name.text.trim(),
+      quantity: _quantity.text.trim(),
+      price: double.parse(_price.text.trim()),
+      daysLeft: int.parse(_daysLeft.text.trim()),
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Add food'),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _name,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: 'Food name'),
-              validator: (value) => value == null || value.trim().isEmpty
-                  ? 'Enter a food name'
-                  : null,
+      content: SizedBox(
+        width: 400,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextFormField(
+                  controller: _name,
+                  autofocus: true,
+                  textCapitalization: TextCapitalization.sentences,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Food name',
+                    hintText: 'e.g. Tomatoes',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Enter a food name';
+                    }
+
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _quantity,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Quantity',
+                    hintText: 'e.g. 3 pieces or 500 g',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Enter a quantity';
+                    }
+
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _price,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Total price',
+                    prefixText: '\$ ',
+                    helperText: 'Price for the entire quantity entered above.',
+                  ),
+                  validator: (value) {
+                    final text = value?.trim() ?? '';
+                    final price = double.tryParse(text);
+
+                    if (!RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(text) ||
+                        price == null ||
+                        !price.isFinite ||
+                        price < 0) {
+                      return 'Enter a valid price, such as 4.50';
+                    }
+
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _daysLeft,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) => _submit(),
+                  decoration: const InputDecoration(
+                    labelText: 'Days remaining',
+                    hintText: 'e.g. 3',
+                    helperText: 'Enter 0 if it should be used today.',
+                  ),
+                  validator: (value) {
+                    final days = int.tryParse(value?.trim() ?? '');
+
+                    if (days == null || days < 0) {
+                      return 'Enter a whole number of 0 or more';
+                    }
+
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  '0–2 days: Use First\n'
+                  '3–5 days: Use Soon\n'
+                  '6+ days: Use Later',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF58645C),
+                    height: 1.6,
+                  ),
+                ),
+              ],
             ),
-            TextFormField(
-              controller: _quantity,
-              decoration: const InputDecoration(labelText: 'Quantity'),
-            ),
-            const Text('For now, new foods use a 7-day estimate and no price.'),
-          ],
+          ),
         ),
       ),
       actions: [
@@ -264,17 +370,7 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
-        TextButton(
-          onPressed: () {
-            if (_formKey.currentState!.validate()) {
-              Navigator.pop(context, (
-                name: _name.text.trim(),
-                quantity: _quantity.text.trim(),
-              ));
-            }
-          },
-          child: const Text('Add'),
-        ),
+        FilledButton(onPressed: _submit, child: const Text('Add')),
       ],
     );
   }
