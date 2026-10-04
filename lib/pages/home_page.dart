@@ -22,7 +22,8 @@ class HomePage extends StatelessWidget {
         SliverToBoxAdapter(
           child: PageHeader(
             title: 'Good morning 👋',
-            subtitle: '${foods.length} items in your refrigerator',
+            subtitle:
+                '${foods.length} ${foods.length == 1 ? 'item' : 'items'} in your refrigerator',
             trailing: CircleAvatar(
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
               child: const Icon(Icons.notifications_none_rounded),
@@ -35,19 +36,21 @@ class HomePage extends StatelessWidget {
             children: [
               _HeroCard(urgentCount: urgent.length, onTap: onViewInventory),
               const SizedBox(height: 22),
-              const _SectionTitle(title: 'Use first', action: 'See inventory'),
+              _SectionTitle(
+                title: 'Inventory',
+                action: 'See inventory',
+                onAction: onViewInventory,
+              ),
               const SizedBox(height: 12),
-              if (urgent.isEmpty)
-                const _EmptyCard(message: 'Nothing urgent — great job!')
+              if (foods.isEmpty)
+                const _EmptyCard(message: 'No food in your refrigerator yet')
               else
-                ...urgent
-                    .take(2)
-                    .map(
-                      (food) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: FoodTile(food: food),
-                      ),
-                    ),
+                ...foods.map(
+                  (food) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: FoodTile(food: food),
+                  ),
+                ),
               const SizedBox(height: 12),
               _RecipeSpotlight(onTap: onViewRecipes),
               const SizedBox(height: 24),

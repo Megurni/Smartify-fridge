@@ -42,10 +42,11 @@ class PageHeader extends StatelessWidget {
 }
 
 class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title, this.action});
+  const _SectionTitle({required this.title, this.action, this.onAction});
 
   final String title;
   final String? action;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -60,10 +61,7 @@ class _SectionTitle extends StatelessWidget {
           ),
         ),
         if (action != null)
-          Text(
-            action!,
-            style: TextStyle(color: Theme.of(context).colorScheme.primary),
-          ),
+          TextButton(onPressed: onAction, child: Text(action!)),
       ],
     );
   }

@@ -61,7 +61,13 @@ class _SmartifyShellState extends State<SmartifyShell> {
       _loadError = null;
     });
     try {
-      final foods = await _repository.getFoods();
+      final foods = (await _repository.getFoods()).toList()
+        ..sort((a, b) {
+          final byExpiry = a.daysLeft.compareTo(b.daysLeft);
+          if (byExpiry != 0) return byExpiry;
+          final byName = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+          return byName != 0 ? byName : a.id.compareTo(b.id);
+        });
       if (mounted) setState(() => _foods = foods);
     } catch (_) {
       if (mounted) {

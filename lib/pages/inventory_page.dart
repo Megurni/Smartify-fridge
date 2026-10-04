@@ -22,7 +22,7 @@ class _InventoryPageState extends State<InventoryPage> {
       children: [
         const PageHeader(
           title: 'My refrigerator',
-          subtitle: 'Tap an item to update its status',
+          subtitle: 'Soonest expiry first • Tap an item to update its status',
         ),
         SizedBox(
           height: 44,
