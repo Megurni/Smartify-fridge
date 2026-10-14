@@ -1,8 +1,10 @@
 import 'models/recipe.dart';
 import 'repositories/recipe_repository.dart';
 import 'models/food_item.dart';
+import 'models/inventory_priority.dart';
 import 'repositories/food_repository.dart';
 export 'models/food_item.dart';
+export 'models/inventory_priority.dart';
 export 'repositories/food_repository.dart';
 import 'package:flutter/material.dart';
 

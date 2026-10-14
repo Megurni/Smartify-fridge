@@ -28,8 +28,23 @@ of their names.
 The default `InMemoryFoodRepository` contains sample foods and does not persist
 changes across restarts. No database or API connection is configured. The UI
 loads foods through the repository and routes add, remove, and undo through it.
-The Add food dialog accepts name and quantity; other fields currently default
-to 7 days remaining, zero price, Other category, and Use later priority.
-Recipe suggestions and savings statistics are still demo content.
+Food records contain `id`, `name`, `storedAt` (stored_at), `status`,
+`quantity`, `price`, and `category`. The Add food dialog defaults `storedAt`
+to the current date and lets you choose an earlier date, price, and
+category. The id is generated when the food is added.
+
+`status` is an accounting lifecycle: `inStock`, `consumed`, or `discarded`.
+Consumed and discarded items leave inventory but remain in the repository.
+Accounting sums consumed prices as saved from waste and discarded prices as
+wasted; the in-memory demo resets these totals on restart.
+
+Inventory uses `InventoryPriority` to sort by a 0–100 score (highest first).
+Estimated shelf life is 3 days for Meat, 5 for Produce, 7 for Dairy, and 14
+for Other. Elapsed shelf life scores 100, one day remaining scores at least
+85, and older items score more than newer ones. Price adds up to 10 points.
+Equal scores sort by older storage date, then id. These are rough estimates
+until a real expiry date is available; quantity is displayed but is not parsed
+into the score because it is free text.
+Recipe suggestions use the active inventory; accounting totals use recorded outcomes.
 
 Run checks with `flutter test` and `flutter analyze`.

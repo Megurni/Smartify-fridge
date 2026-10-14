@@ -12,7 +12,9 @@ abstract class FoodRepository {
 /// Temporary data source. Changes last only for this app session.
 class InMemoryFoodRepository implements FoodRepository {
   InMemoryFoodRepository({Iterable<FoodItem>? initialFoods})
-    : _foods = {for (final food in initialFoods ?? _sampleFoods) food.id: food};
+    : _foods = {
+        for (final food in initialFoods ?? _sampleFoods()) food.id: food,
+      };
 
   final Map<String, FoodItem> _foods;
 
@@ -44,65 +46,47 @@ class InMemoryFoodRepository implements FoodRepository {
   }
 }
 
-const _sampleFoods = [
-  FoodItem(
-    id: 'chicken',
-    name: 'Chicken breast',
-    emoji: '🍗',
-    quantity: '2 pieces',
-    daysLeft: 1,
-    price: 8.50,
-    priority: FoodPriority.first,
-    category: 'Meat',
-  ),
-  FoodItem(
-    id: 'spinach',
-    name: 'Baby spinach',
-    emoji: '🥬',
-    quantity: '1 bag',
-    daysLeft: 2,
-    price: 4.20,
-    priority: FoodPriority.first,
-    category: 'Produce',
-  ),
-  FoodItem(
-    id: 'mushrooms',
-    name: 'Mushrooms',
-    emoji: '🍄',
-    quantity: '250 g',
-    daysLeft: 3,
-    price: 3.80,
-    priority: FoodPriority.soon,
-    category: 'Produce',
-  ),
-  FoodItem(
-    id: 'yogurt',
-    name: 'Greek yogurt',
-    emoji: '🥛',
-    quantity: '3 cups',
-    daysLeft: 5,
-    price: 5.40,
-    priority: FoodPriority.soon,
-    category: 'Dairy',
-  ),
-  FoodItem(
-    id: 'carrots',
-    name: 'Carrots',
-    emoji: '🥕',
-    quantity: '6 pieces',
-    daysLeft: 9,
-    price: 2.60,
-    priority: FoodPriority.later,
-    category: 'Produce',
-  ),
-  FoodItem(
-    id: 'eggs',
-    name: 'Eggs',
-    emoji: '🥚',
-    quantity: '8 eggs',
-    daysLeft: 12,
-    price: 4.90,
-    priority: FoodPriority.later,
-    category: 'Dairy',
-  ),
-];
+List<FoodItem> _sampleFoods() {
+  final now = DateTime.now();
+  FoodItem sample(
+    String id,
+    String name,
+    String quantity,
+    int daysStored,
+    double price,
+    String category, {
+    FoodStatus status = FoodStatus.inStock,
+  }) => FoodItem(
+    id: id,
+    name: name,
+    storedAt: now.subtract(Duration(days: daysStored)),
+    status: status,
+    quantity: quantity,
+    price: price,
+    category: category,
+  );
+  return [
+    sample(
+      'chicken',
+      'Chicken breast',
+      '2 pieces',
+      2,
+      8.50,
+      'Meat',
+      status: FoodStatus.inStock,
+    ),
+    sample(
+      'spinach',
+      'Baby spinach',
+      '1 bag',
+      4,
+      4.20,
+      'Produce',
+      status: FoodStatus.inStock,
+    ),
+    sample('mushrooms', 'Mushrooms', '250 g', 2, 3.80, 'Produce'),
+    sample('yogurt', 'Greek yogurt', '3 cups', 2, 5.40, 'Dairy'),
+    sample('carrots', 'Carrots', '6 pieces', 0, 2.60, 'Produce'),
+    sample('eggs', 'Eggs', '8 eggs', 0, 4.90, 'Dairy'),
+  ];
+}

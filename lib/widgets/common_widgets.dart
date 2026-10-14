@@ -125,7 +125,11 @@ class FoodTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  food.daysLeft == 1 ? '1 day' : '${food.daysLeft} days',
+                  food.daysLeft <= 0
+                      ? 'Check now'
+                      : food.daysLeft == 1
+                      ? '1 day'
+                      : '${food.daysLeft} days',
                   style: TextStyle(
                     color: color,
                     fontWeight: FontWeight.w700,

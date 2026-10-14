@@ -5,11 +5,10 @@ import 'package:smartify_refrigerator_demo/repositories/food_repository.dart';
 FoodItem food(String id, String name) => FoodItem(
   id: id,
   name: name,
-  emoji: '🥚',
+  storedAt: DateTime(2026, 10, 11),
+  status: FoodStatus.inStock,
   quantity: '1',
-  daysLeft: 3,
   price: 2,
-  priority: FoodPriority.soon,
   category: 'Dairy',
 );
 

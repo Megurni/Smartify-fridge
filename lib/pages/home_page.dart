@@ -4,19 +4,28 @@ class HomePage extends StatelessWidget {
   const HomePage({
     super.key,
     required this.foods,
+    required this.allFoods,
     required this.onViewInventory,
     required this.onViewRecipes,
   });
 
   final List<FoodItem> foods;
+  final List<FoodItem> allFoods;
   final VoidCallback onViewInventory;
   final VoidCallback onViewRecipes;
 
   @override
   Widget build(BuildContext context) {
-    final urgent = foods
+    final sorted = InventoryPriority.sorted(foods, DateTime.now());
+    final urgent = sorted
         .where((food) => food.priority == FoodPriority.first)
         .toList();
+    final saved = allFoods
+        .where((food) => food.status == FoodStatus.consumed)
+        .fold<double>(0, (total, food) => total + food.price);
+    final wasted = allFoods
+        .where((food) => food.status == FoodStatus.discarded)
+        .fold<double>(0, (total, food) => total + food.price);
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
@@ -42,10 +51,10 @@ class HomePage extends StatelessWidget {
                 onAction: onViewInventory,
               ),
               const SizedBox(height: 12),
-              if (foods.isEmpty)
+              if (sorted.isEmpty)
                 const _EmptyCard(message: 'No food in your refrigerator yet')
               else
-                ...foods.map(
+                ...sorted.map(
                   (food) => Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: FoodTile(food: food),
@@ -54,25 +63,25 @@ class HomePage extends StatelessWidget {
               const SizedBox(height: 12),
               _RecipeSpotlight(onTap: onViewRecipes),
               const SizedBox(height: 24),
-              const _SectionTitle(title: 'This month'),
+              const _SectionTitle(title: 'Food accounting'),
               const SizedBox(height: 12),
-              const Row(
+              Row(
                 children: [
                   Expanded(
                     child: _MetricCard(
                       icon: Icons.savings_outlined,
-                      value: r'$37',
-                      label: 'Waste avoided',
-                      color: Color(0xFF28655A),
+                      value: '\$${saved.toStringAsFixed(2)}',
+                      label: 'Saved from waste',
+                      color: const Color(0xFF28655A),
                     ),
                   ),
-                  SizedBox(width: 12),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: _MetricCard(
-                      icon: Icons.eco_outlined,
-                      value: '18%',
-                      label: 'Less waste',
-                      color: Color(0xFFD87C4A),
+                      icon: Icons.delete_outline,
+                      value: '\$${wasted.toStringAsFixed(2)}',
+                      label: 'Wasted',
+                      color: const Color(0xFFD87C4A),
                     ),
                   ),
                 ],

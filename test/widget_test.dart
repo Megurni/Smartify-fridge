@@ -38,47 +38,46 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Consumed'));
     await tester.pumpAndSettle();
+    expect((await repository.getFoods()).single.status, FoodStatus.consumed);
     await tester.tap(find.text('Home'));
     await tester.pumpAndSettle();
     expect(find.text('No food in your refrigerator yet'), findsOneWidget);
     expect(find.text('0 items in your refrigerator'), findsOneWidget);
   });
-  testWidgets('inventory and home order foods by days remaining', (
+  testWidgets('inventory and home order foods by priority score', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1200, 1800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    const foods = [
+    final now = DateTime.now();
+    final foods = [
       FoodItem(
         id: 'later',
         name: 'Carrots',
-        emoji: '🥕',
+        storedAt: now,
+        status: FoodStatus.inStock,
         quantity: '1 bag',
-        daysLeft: 9,
         price: 1,
-        priority: FoodPriority.later,
         category: 'Produce',
       ),
       FoodItem(
         id: 'soon',
         name: 'Yogurt',
-        emoji: '🥛',
+        storedAt: now.subtract(const Duration(days: 3)),
+        status: FoodStatus.inStock,
         quantity: '1 cup',
-        daysLeft: 4,
         price: 1,
-        priority: FoodPriority.soon,
         category: 'Dairy',
       ),
       FoodItem(
         id: 'first',
         name: 'Milk',
-        emoji: '🥛',
+        storedAt: now.subtract(const Duration(days: 6)),
+        status: FoodStatus.inStock,
         quantity: '1 carton',
-        daysLeft: 1,
         price: 1,
-        priority: FoodPriority.first,
         category: 'Dairy',
       ),
     ];
@@ -100,13 +99,44 @@ void main() {
     await tester.tap(find.text('Add food'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).first, 'Tomatoes');
-    await tester.enterText(find.byType(TextFormField).last, '0');
     await tester.tap(find.text('Add'));
     await tester.pumpAndSettle();
-    expect(visibleFoodNames(), ['Tomatoes', 'Milk', 'Yogurt', 'Carrots']);
+    expect(visibleFoodNames(), ['Milk', 'Yogurt', 'Carrots', 'Tomatoes']);
 
     await tester.tap(find.text('Home'));
     await tester.pumpAndSettle();
-    expect(visibleFoodNames(), ['Tomatoes', 'Milk', 'Yogurt', 'Carrots']);
+    expect(visibleFoodNames(), ['Milk', 'Yogurt', 'Carrots', 'Tomatoes']);
+  });
+
+  testWidgets('accounting totals consumed as saved and discarded as wasted', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    FoodItem item(String id, FoodStatus status, double price) => FoodItem(
+      id: id,
+      name: id,
+      storedAt: now,
+      status: status,
+      quantity: '1',
+      price: price,
+      category: 'Other',
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: InsightsPage(
+            foods: [
+              item('used', FoodStatus.consumed, 5),
+              item('waste', FoodStatus.discarded, 2.40),
+              item('stock', FoodStatus.inStock, 3),
+            ],
+          ),
+        ),
+      ),
+    );
+    expect(find.text('\$5.00'), findsOneWidget);
+    expect(find.text('Wasted: \$2.40'), findsOneWidget);
+    expect(find.text('Items consumed'), findsOneWidget);
+    expect(find.text('Items discarded'), findsOneWidget);
   });
 }

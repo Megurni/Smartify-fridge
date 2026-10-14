@@ -9,12 +9,19 @@ import 'package:smartify_refrigerator_demo/repositories/recipe_repository.dart';
 FoodItem food(String name, FoodPriority priority) => FoodItem(
   id: name,
   name: name,
-  emoji: '',
+  storedAt: DateTime.now().subtract(
+    Duration(
+      days: priority == FoodPriority.first
+          ? 4
+          : priority == FoodPriority.soon
+          ? 3
+          : 0,
+    ),
+  ),
+  status: FoodStatus.inStock,
   quantity: '1',
-  daysLeft: 2,
   price: 0,
-  priority: priority,
-  category: 'Other',
+  category: 'Produce',
 );
 
 void main() {

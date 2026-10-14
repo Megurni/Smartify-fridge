@@ -4,7 +4,7 @@ class InventoryPage extends StatefulWidget {
   const InventoryPage({super.key, required this.foods, required this.onRemove});
 
   final List<FoodItem> foods;
-  final void Function(FoodItem food, String outcome) onRemove;
+  final void Function(FoodItem food, FoodStatus outcome) onRemove;
 
   @override
   State<InventoryPage> createState() => _InventoryPageState();
@@ -15,14 +15,18 @@ class _InventoryPageState extends State<InventoryPage> {
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final sorted = InventoryPriority.sorted(widget.foods, now);
     final visible = _filter == null
-        ? widget.foods
-        : widget.foods.where((food) => food.priority == _filter).toList();
+        ? sorted
+        : sorted
+              .where((food) => InventoryPriority.priority(food, now) == _filter)
+              .toList();
     return Column(
       children: [
         const PageHeader(
           title: 'My refrigerator',
-          subtitle: 'Soonest expiry first • Tap an item to update its status',
+          subtitle: 'Sorted by priority score • tap an item for details',
         ),
         SizedBox(
           height: 44,
@@ -96,7 +100,14 @@ class _InventoryPageState extends State<InventoryPage> {
             ),
             const SizedBox(height: 5),
             Text(
-              '${food.quantity} • ${food.daysLeft} days left • \$${food.price.toStringAsFixed(2)}',
+              '${food.quantity} • stored ${food.storedAt.year}-${food.storedAt.month.toString().padLeft(2, '0')}-${food.storedAt.day.toString().padLeft(2, '0')} • \$${food.price.toStringAsFixed(2)}',
+            ),
+            const SizedBox(height: 5),
+            Text(
+              'ID: ${food.id} • Status: ${food.status.name} • Category: ${food.category}',
+            ),
+            Text(
+              'Priority score: ${InventoryPriority.score(food, DateTime.now())}/100',
             ),
             const SizedBox(height: 24),
             Row(
@@ -105,7 +116,7 @@ class _InventoryPageState extends State<InventoryPage> {
                   child: FilledButton.icon(
                     onPressed: () {
                       Navigator.pop(context);
-                      widget.onRemove(food, 'consumed');
+                      widget.onRemove(food, FoodStatus.consumed);
                     },
                     icon: const Icon(Icons.check_circle_outline),
                     label: const Text('Consumed'),
@@ -116,7 +127,7 @@ class _InventoryPageState extends State<InventoryPage> {
                   child: OutlinedButton.icon(
                     onPressed: () {
                       Navigator.pop(context);
-                      widget.onRemove(food, 'discarded');
+                      widget.onRemove(food, FoodStatus.discarded);
                     },
                     icon: const Icon(Icons.delete_outline),
                     label: const Text('Discarded'),

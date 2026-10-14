@@ -1,51 +1,64 @@
 part of '../main.dart';
 
 class InsightsPage extends StatelessWidget {
-  const InsightsPage({super.key});
+  const InsightsPage({super.key, required this.foods});
+
+  final List<FoodItem> foods;
 
   @override
   Widget build(BuildContext context) {
+    final consumed = foods
+        .where((food) => food.status == FoodStatus.consumed)
+        .toList();
+    final discarded = foods
+        .where((food) => food.status == FoodStatus.discarded)
+        .toList();
+    final saved = consumed.fold<double>(0, (total, food) => total + food.price);
+    final wasted = discarded.fold<double>(
+      0,
+      (total, food) => total + food.price,
+    );
+
     return CustomScrollView(
       slivers: [
         const SliverToBoxAdapter(
           child: PageHeader(
-            title: 'Your impact',
-            subtitle: 'August 2026 waste summary',
+            title: 'Food accounting',
+            subtitle: 'Totals from recorded food outcomes',
           ),
         ),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
           sliver: SliverList.list(
-            children: const [
-              _SavingsHero(),
-              SizedBox(height: 18),
+            children: [
+              _AccountingHero(saved: saved, wasted: wasted),
+              const SizedBox(height: 18),
               Row(
                 children: [
                   Expanded(
                     child: _MetricCard(
                       icon: Icons.check_circle_outline,
-                      value: '24',
+                      value: '${consumed.length}',
                       label: 'Items consumed',
-                      color: Color(0xFF28655A),
+                      color: const Color(0xFF28655A),
                     ),
                   ),
-                  SizedBox(width: 12),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: _MetricCard(
                       icon: Icons.delete_outline,
-                      value: '3',
+                      value: '${discarded.length}',
                       label: 'Items discarded',
-                      color: Color(0xFFD87C4A),
+                      color: const Color(0xFFD87C4A),
                     ),
                   ),
                 ],
               ),
-              SizedBox(height: 24),
-              _SectionTitle(title: 'Waste trend'),
-              SizedBox(height: 12),
-              _WasteChart(),
-              SizedBox(height: 24),
-              _InsightBanner(),
+              const SizedBox(height: 18),
+              Text(
+                'Consumed food counts as saved from waste. Discarded food counts as wasted. Values use each food’s recorded price.',
+                style: TextStyle(color: Colors.grey.shade600),
+              ),
             ],
           ),
         ),
@@ -54,8 +67,11 @@ class InsightsPage extends StatelessWidget {
   }
 }
 
-class _SavingsHero extends StatelessWidget {
-  const _SavingsHero();
+class _AccountingHero extends StatelessWidget {
+  const _AccountingHero({required this.saved, required this.wasted});
+
+  final double saved;
+  final double wasted;
 
   @override
   Widget build(BuildContext context) {
@@ -67,117 +83,31 @@ class _SavingsHero extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(28),
       ),
-      child: const Column(
+      child: Column(
         children: [
-          Text(
-            'ESTIMATED SAVINGS',
+          const Text(
+            'SAVED FROM WASTE',
             style: TextStyle(
               color: Color(0xFFCAE2D5),
               fontWeight: FontWeight.w700,
               letterSpacing: 1.2,
             ),
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           Text(
-            r'$37.20',
-            style: TextStyle(
+            '\$${saved.toStringAsFixed(2)}',
+            style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w900,
               fontSize: 42,
             ),
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           Text(
-            '↑ 18% less waste than last month',
-            style: TextStyle(
+            'Wasted: \$${wasted.toStringAsFixed(2)}',
+            style: const TextStyle(
               color: Color(0xFFF2B866),
               fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WasteChart extends StatelessWidget {
-  const _WasteChart();
-
-  @override
-  Widget build(BuildContext context) {
-    const values = [0.85, 0.68, 0.74, 0.52, 0.43, 0.34];
-    const months = ['Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'];
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 22, 20, 16),
-        child: SizedBox(
-          height: 175,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: List.generate(
-              values.length,
-              (index) => Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 500),
-                      width: 22,
-                      height: 112 * values[index],
-                      decoration: BoxDecoration(
-                        color: index == values.length - 1
-                            ? const Color(0xFF28655A)
-                            : const Color(0xFFB9D4C9),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      months[index],
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _InsightBanner extends StatelessWidget {
-  const _InsightBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFE9D6),
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: const Row(
-        children: [
-          Icon(
-            Icons.lightbulb_outline_rounded,
-            color: Color(0xFFD87C4A),
-            size: 30,
-          ),
-          SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              'You rescue produce most often. Keep checking leafy greens first!',
-              style: TextStyle(
-                color: Color(0xFF6F4C37),
-                height: 1.4,
-                fontWeight: FontWeight.w600,
-              ),
             ),
           ),
         ],

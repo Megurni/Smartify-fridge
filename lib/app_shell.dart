@@ -61,13 +61,7 @@ class _SmartifyShellState extends State<SmartifyShell> {
       _loadError = null;
     });
     try {
-      final foods = (await _repository.getFoods()).toList()
-        ..sort((a, b) {
-          final byExpiry = a.daysLeft.compareTo(b.daysLeft);
-          if (byExpiry != 0) return byExpiry;
-          final byName = a.name.toLowerCase().compareTo(b.name.toLowerCase());
-          return byName != 0 ? byName : a.id.compareTo(b.id);
-        });
+      final foods = await _repository.getFoods();
       if (mounted) setState(() => _foods = foods);
     } catch (_) {
       if (mounted) {
@@ -113,12 +107,12 @@ class _SmartifyShellState extends State<SmartifyShell> {
     }
   }
 
-  void _removeFood(FoodItem food, String outcome) {
+  void _removeFood(FoodItem food, FoodStatus outcome) {
     _changeFoods(
-      () => _repository.deleteFood(food.id),
-      '${food.name} marked as $outcome',
+      () => _repository.updateFood(food.copyWith(status: outcome)),
+      '${food.name} marked as ${outcome.name}',
       undo: () => _changeFoods(
-        () => _repository.addFood(food),
+        () => _repository.updateFood(food),
         '${food.name} restored',
       ),
     );
@@ -127,26 +121,25 @@ class _SmartifyShellState extends State<SmartifyShell> {
   Future<void> _addFood() async {
     final entry =
         await showDialog<
-          ({String name, String quantity, double price, int daysLeft})
+          ({
+            String name,
+            DateTime storedAt,
+            String quantity,
+            double price,
+            String category,
+          })
         >(context: context, builder: (_) => const _AddFoodDialog());
 
     if (entry == null || !mounted) return;
 
-    final priority = entry.daysLeft <= 2
-        ? FoodPriority.first
-        : entry.daysLeft <= 5
-        ? FoodPriority.soon
-        : FoodPriority.later;
-
     final food = FoodItem(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       name: entry.name,
-      emoji: '🥑',
+      storedAt: entry.storedAt,
+      status: FoodStatus.inStock,
       quantity: entry.quantity,
-      daysLeft: entry.daysLeft,
       price: entry.price,
-      priority: priority,
-      category: 'Other',
+      category: entry.category,
     );
 
     await _changeFoods(
@@ -157,15 +150,17 @@ class _SmartifyShellState extends State<SmartifyShell> {
 
   @override
   Widget build(BuildContext context) {
+    final activeFoods = InventoryPriority.sorted(_foods, DateTime.now());
     final pages = [
       HomePage(
-        foods: _foods,
+        foods: activeFoods,
+        allFoods: _foods,
         onViewInventory: () => setState(() => _selectedIndex = 1),
         onViewRecipes: () => setState(() => _selectedIndex = 2),
       ),
-      InventoryPage(foods: _foods, onRemove: _removeFood),
-      RecipesPage(foods: _foods, active: _selectedIndex == 2),
-      const InsightsPage(),
+      InventoryPage(foods: activeFoods, onRemove: _removeFood),
+      RecipesPage(foods: activeFoods, active: _selectedIndex == 2),
+      InsightsPage(foods: _foods),
     ];
 
     return Scaffold(
@@ -220,7 +215,7 @@ class _SmartifyShellState extends State<SmartifyShell> {
           NavigationDestination(
             icon: Icon(Icons.bar_chart_outlined),
             selectedIcon: Icon(Icons.bar_chart_rounded),
-            label: 'Savings',
+            label: 'Accounting',
           ),
         ],
       ),
@@ -239,15 +234,15 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
   final _name = TextEditingController();
   final _quantity = TextEditingController(text: '1 item');
   final _price = TextEditingController(text: '0.00');
-  final _daysLeft = TextEditingController(text: '7');
   final _formKey = GlobalKey<FormState>();
+  DateTime _storedAt = DateTime.now();
+  String _category = 'Other';
 
   @override
   void dispose() {
     _name.dispose();
     _quantity.dispose();
     _price.dispose();
-    _daysLeft.dispose();
     super.dispose();
   }
 
@@ -258,7 +253,8 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
       name: _name.text.trim(),
       quantity: _quantity.text.trim(),
       price: double.parse(_price.text.trim()),
-      daysLeft: int.parse(_daysLeft.text.trim()),
+      storedAt: _storedAt,
+      category: _category,
     ));
   }
 
@@ -335,36 +331,39 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                   },
                 ),
                 const SizedBox(height: 16),
-                TextFormField(
-                  controller: _daysLeft,
-                  keyboardType: TextInputType.number,
-                  textInputAction: TextInputAction.done,
-                  onFieldSubmitted: (_) => _submit(),
-                  decoration: const InputDecoration(
-                    labelText: 'Days remaining',
-                    hintText: 'e.g. 3',
-                    helperText: 'Enter 0 if it should be used today.',
-                  ),
-                  validator: (value) {
-                    final days = int.tryParse(value?.trim() ?? '');
-
-                    if (days == null || days < 0) {
-                      return 'Enter a whole number of 0 or more';
-                    }
-
-                    return null;
-                  },
+                DropdownButtonFormField<String>(
+                  initialValue: _category,
+                  decoration: const InputDecoration(labelText: 'Category'),
+                  items: const ['Produce', 'Meat', 'Dairy', 'Other']
+                      .map(
+                        (category) => DropdownMenuItem(
+                          value: category,
+                          child: Text(category),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) =>
+                      setState(() => _category = value ?? 'Other'),
                 ),
-                const SizedBox(height: 20),
-                const Text(
-                  '0–2 days: Use First\n'
-                  '3–5 days: Use Soon\n'
-                  '6+ days: Use Later',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF58645C),
-                    height: 1.6,
+                const SizedBox(height: 16),
+                TextButton.icon(
+                  onPressed: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: _storedAt,
+                      firstDate: DateTime(2000),
+                      lastDate: DateTime.now(),
+                    );
+                    if (date != null) setState(() => _storedAt = date);
+                  },
+                  icon: const Icon(Icons.calendar_today_outlined),
+                  label: Text(
+                    'Stored at: ${_storedAt.year}-${_storedAt.month.toString().padLeft(2, '0')}-${_storedAt.day.toString().padLeft(2, '0')}',
                   ),
+                ),
+                const Text(
+                  'Priority is estimated from storage age, category and price.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF58645C)),
                 ),
               ],
             ),
