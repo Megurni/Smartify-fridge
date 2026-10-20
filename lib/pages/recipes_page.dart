@@ -1,10 +1,13 @@
 part of '../main.dart';
 
 class RecipesPage extends StatefulWidget {
-  const RecipesPage({super.key, required this.foods, this.active = true});
+  const RecipesPage({super.key, required this.foods, this.active = true,
+    this.plannedIds = const {}, this.onPlan});
 
   final List<FoodItem> foods;
   final bool active;
+  final Set<String> plannedIds;
+  final ValueChanged<Recipe>? onPlan;
 
   @override
   State<RecipesPage> createState() => _RecipesPageState();
@@ -288,7 +291,12 @@ class _RecipesPageState extends State<RecipesPage> {
                 for (final match in visibleMatches)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 14),
-                    child: _RecipeCard(match: match),
+                    child: _RecipeCard(
+                      match: match,
+                      planned: widget.plannedIds.contains(match.recipe.id),
+                      onPlan: widget.onPlan == null ? null
+                          : () => widget.onPlan!(match.recipe),
+                    ),
                   ),
               const SizedBox(height: 12),
               const Text(
@@ -380,7 +388,10 @@ class _RecipePhoto extends StatelessWidget {
 }
 
 class _RecipeCard extends StatelessWidget {
-  const _RecipeCard({required this.match});
+  const _RecipeCard({required this.match, this.planned = false, this.onPlan});
+
+  final bool planned;
+  final VoidCallback? onPlan;
 
   final RecipeMatch match;
 
@@ -435,6 +446,11 @@ class _RecipeCard extends StatelessWidget {
                             fontWeight: FontWeight.w700,
                             height: 1.3,
                           ),
+                        ),
+                        const SizedBox(height: 8),
+                        FilledButton.tonal(
+                          onPressed: planned ? null : onPlan,
+                          child: Text(planned ? 'Planned' : 'Want to Make'),
                         ),
                         if (matchedNames.isNotEmpty) ...[
                           const SizedBox(height: 8),

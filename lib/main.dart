@@ -1,4 +1,5 @@
 import 'models/recipe.dart';
+import 'models/shopping_plan.dart';
 import 'repositories/recipe_repository.dart';
 import 'models/food_item.dart';
 import 'models/inventory_priority.dart';
@@ -14,6 +15,7 @@ part 'pages/home_page.dart';
 part 'pages/insights_page.dart';
 part 'pages/inventory_page.dart';
 part 'pages/recipes_page.dart';
+part 'pages/savings_page.dart';
 part 'widgets/common_widgets.dart';
 
 void main() {

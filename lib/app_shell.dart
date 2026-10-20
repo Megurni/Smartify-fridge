@@ -44,6 +44,7 @@ class _SmartifyShellState extends State<SmartifyShell> {
   int _selectedIndex = 0;
   late final FoodRepository _repository;
   List<FoodItem> _foods = [];
+  final _plan = ShoppingPlan();
   bool _loading = true;
   bool _busy = false;
   String? _loadError;
@@ -108,8 +109,17 @@ class _SmartifyShellState extends State<SmartifyShell> {
   }
 
   void _removeFood(FoodItem food, FoodStatus outcome) {
+    if (_busy || food.status != FoodStatus.inStock) return;
     _changeFoods(
-      () => _repository.updateFood(food.copyWith(status: outcome)),
+      () async {
+        final current = await _repository.getFood(food.id);
+        if (current == null || current.status != FoodStatus.inStock) return;
+        await _repository.updateFood(current.copyWith(
+          status: outcome,
+          savedAmount: outcome == FoodStatus.consumed && current.daysLeft > 0
+              ? current.price : 0,
+        ));
+      },
       '${food.name} marked as ${outcome.name}',
       undo: () => _changeFoods(
         () => _repository.updateFood(food),
@@ -159,8 +169,25 @@ class _SmartifyShellState extends State<SmartifyShell> {
         onViewRecipes: () => setState(() => _selectedIndex = 2),
       ),
       InventoryPage(foods: activeFoods, onRemove: _removeFood),
-      RecipesPage(foods: activeFoods, active: _selectedIndex == 2),
+      RecipesPage(
+        foods: activeFoods,
+        active: _selectedIndex == 2,
+        plannedIds: _plan.recipes.map((recipe) => recipe.id).toSet(),
+        onPlan: (recipe) {
+          setState(() => _plan.addRecipe(recipe, activeFoods));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Recipe saved to Savings & Shopping List')),
+          );
+        },
+      ),
       InsightsPage(foods: _foods),
+      SavingsPage(
+        foods: _foods,
+        plan: _plan,
+        busy: _busy,
+        onChanged: () => setState(() {}),
+        onUsed: (food) => _removeFood(food, FoodStatus.consumed),
+      ),
     ];
 
     return Scaffold(
@@ -216,6 +243,11 @@ class _SmartifyShellState extends State<SmartifyShell> {
             icon: Icon(Icons.bar_chart_outlined),
             selectedIcon: Icon(Icons.bar_chart_rounded),
             label: 'Accounting',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.shopping_basket_outlined),
+            selectedIcon: Icon(Icons.shopping_basket),
+            label: 'Savings',
           ),
         ],
       ),

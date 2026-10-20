@@ -14,6 +14,7 @@ class FoodItem {
     required this.quantity,
     required this.price,
     required this.category,
+    this.savedAmount = 0,
   });
 
   final String id;
@@ -23,8 +24,10 @@ class FoodItem {
   final String quantity;
   final double price;
   final String category;
+  // Snapshot at consumption time; expiry estimates changing later cannot alter it.
+  final double savedAmount;
 
-  FoodItem copyWith({FoodStatus? status}) => FoodItem(
+  FoodItem copyWith({FoodStatus? status, double? savedAmount}) => FoodItem(
     id: id,
     name: name,
     storedAt: storedAt,
@@ -32,6 +35,7 @@ class FoodItem {
     quantity: quantity,
     price: price,
     category: category,
+    savedAmount: savedAmount ?? this.savedAmount,
   );
 
   int get daysLeft => InventoryPriority.daysLeft(this, DateTime.now());
