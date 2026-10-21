@@ -1,14 +1,12 @@
 part of '../main.dart';
 
-class SavingsPage extends StatelessWidget {
-  const SavingsPage({super.key, required this.foods, required this.plan,
-    required this.onChanged, required this.onUsed, this.busy = false});
+class ShoppingListPage extends StatelessWidget {
+  const ShoppingListPage({super.key, required this.foods, required this.plan,
+    required this.onChanged});
 
   final List<FoodItem> foods;
   final ShoppingPlan plan;
   final VoidCallback onChanged;
-  final ValueChanged<FoodItem> onUsed;
-  final bool busy;
 
   Future<void> _edit(BuildContext context, [ShoppingItem? item]) async {
     final result = await showDialog<({String name, String quantity})>(
@@ -32,30 +30,13 @@ class SavingsPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.only(bottom: 28),
       children: [
-        const PageHeader(title: 'Savings & Shopping List',
+        const PageHeader(title: 'Shopping List',
           subtitle: 'Plan your meals. Make the most of your fridge.'),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Card(child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Money saved', style: TextStyle(fontSize: 18)),
-                    Text('\$${plan.savings(foods).toStringAsFixed(2)}',
-                      style: const TextStyle(fontSize: 38, fontWeight: FontWeight.bold,
-                        color: Color(0xFF28655A))),
-                    const Text('Recorded value of fridge food marked used before its '
-                      'estimated expiry. Purchases do not add savings.'),
-                    const SizedBox(height: 8),
-                    const Text('Data lasts for this app session.',
-                      style: TextStyle(color: Colors.grey, fontSize: 12)),
-                  ],
-                ),
-              )),
-              const SizedBox(height: 24),
               const Text('Planned recipes',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
               if (plan.recipes.isEmpty)
@@ -116,25 +97,6 @@ class SavingsPage extends StatelessWidget {
                     onChanged();
                   }, icon: const Icon(Icons.delete_outline)),
                 ])),
-              const SizedBox(height: 24),
-              const Text('Used food from your fridge?',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-              const Text('Mark used only after cooking. This uses the full recorded '
-                'quantity and removes it from inventory. You can undo the action.'),
-              if (stock.isEmpty)
-                const Padding(padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Text('No ingredients left in your fridge.')),
-              for (final food in stock)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(food.name),
-                  subtitle: Text('${food.quantity} · \$${food.price.toStringAsFixed(2)}'
-                    '${food.daysLeft <= 0 ? '\nPast estimated shelf life: no savings credit' : ''}'),
-                  trailing: TextButton(
-                    onPressed: busy ? null : () => onUsed(food),
-                    child: const Text('Mark used'),
-                  ),
-                ),
             ],
           ),
         ),

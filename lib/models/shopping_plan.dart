@@ -30,14 +30,4 @@ class ShoppingPlan {
     }
   }
 
-  double savings(Iterable<FoodItem> foods) {
-    final used = <String>{};
-    var cents = 0;
-    for (final food in foods) {
-      if (food.status == FoodStatus.consumed && used.add(food.id)) {
-        cents += (food.savedAmount * 100).round();
-      }
-    }
-    return cents / 100;
-  }
 }

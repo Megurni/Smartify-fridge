@@ -15,7 +15,7 @@ part 'pages/home_page.dart';
 part 'pages/insights_page.dart';
 part 'pages/inventory_page.dart';
 part 'pages/recipes_page.dart';
-part 'pages/savings_page.dart';
+part 'pages/shopping_list_page.dart';
 part 'widgets/common_widgets.dart';
 
 void main() {

@@ -114,11 +114,7 @@ class _SmartifyShellState extends State<SmartifyShell> {
       () async {
         final current = await _repository.getFood(food.id);
         if (current == null || current.status != FoodStatus.inStock) return;
-        await _repository.updateFood(current.copyWith(
-          status: outcome,
-          savedAmount: outcome == FoodStatus.consumed && current.daysLeft > 0
-              ? current.price : 0,
-        ));
+        await _repository.updateFood(current.copyWith(status: outcome));
       },
       '${food.name} marked as ${outcome.name}',
       undo: () => _changeFoods(
@@ -176,17 +172,15 @@ class _SmartifyShellState extends State<SmartifyShell> {
         onPlan: (recipe) {
           setState(() => _plan.addRecipe(recipe, activeFoods));
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Recipe saved to Savings & Shopping List')),
+            const SnackBar(content: Text('Recipe added to Shopping List')),
           );
         },
       ),
       InsightsPage(foods: _foods),
-      SavingsPage(
+      ShoppingListPage(
         foods: _foods,
         plan: _plan,
-        busy: _busy,
         onChanged: () => setState(() {}),
-        onUsed: (food) => _removeFood(food, FoodStatus.consumed),
       ),
     ];
 
@@ -247,7 +241,7 @@ class _SmartifyShellState extends State<SmartifyShell> {
           NavigationDestination(
             icon: Icon(Icons.shopping_basket_outlined),
             selectedIcon: Icon(Icons.shopping_basket),
-            label: 'Savings',
+            label: 'Shopping',
           ),
         ],
       ),
