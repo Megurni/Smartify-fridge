@@ -2,24 +2,37 @@
 
 Flutter frontend for the Smartify fridge Flask backend.
 
-## Run
+## Pi deployment: localhost and Tailscale
 
-Start the backend on port 5001, then run `flutter run` from this folder. The
-default backend address is `http://localhost:5001` on web, desktop, and the iOS
-simulator, and `http://10.0.2.2:5001` on the Android emulator. For a physical
-device, use your computer's LAN address:
+One web build supports both http://localhost:8080 on the Pi and
+http://100.112.112.84:8080 on an authorized secondary Tailscale device.
+Web builds default to /api/ on the current webpage's origin. The supplied Nginx
+configuration serves the frontend on 8080 and forwards /api/ to the backend on
+127.0.0.1:5001. See [Pi setup instructions](deploy/pi/README.md).
 
-```
-flutter run --dart-define=SMARTIFY_API_URL=http://192.168.1.10:5001
+Build on your development computer with `flutter build web --release`, without
+a SMARTIFY_API_URL override, and deploy the files and Nginx config to the Pi.
+
+## Local development
+
+Start the backend on port 5001. For Flutter Web without Nginx, explicitly select
+the backend (Flutter's development server does not forward /api/):
+
+```sh
+flutter run -d chrome --dart-define=SMARTIFY_API_URL=http://localhost:5001
 ```
 
-Replace the example address with the computer running Flask. New manually added
-food goes on the first existing shelf. If there is no shelf, the app creates a
-`Fridge` shelf. Set a specific shelf when there are several:
+For the Pi backend over Tailscale:
 
+```sh
+flutter run -d chrome --dart-define=SMARTIFY_API_URL=http://100.112.112.84:5001
 ```
-flutter run --dart-define=SMARTIFY_API_URL=http://192.168.1.10:5001 --dart-define=SMARTIFY_SHELF_ID=2
-```
+
+Native defaults remain localhost:5001 on desktop/iOS and the configured Pi
+100.112.112.84:5001 on Android. SMARTIFY_API_URL overrides these for other devices.
+New manually added food goes on the first existing shelf, or a new Fridge shelf
+if none exists. To choose a shelf, add `--dart-define=SMARTIFY_SHELF_ID=2` using
+your actual backend shelf ID.
 
 ## Inventory data
 

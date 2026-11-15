@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'config/api_config.dart';
+
 import 'models/recipe.dart';
 import 'models/shopping_plan.dart';
 import 'repositories/recipe_repository.dart';
@@ -28,11 +30,13 @@ part 'widgets/common_widgets.dart';
 void main() {
   const configuredUrl = String.fromEnvironment('SMARTIFY_API_URL');
   const configuredShelfId = int.fromEnvironment('SMARTIFY_SHELF_ID');
-  final url = configuredUrl.isNotEmpty
-      ? configuredUrl
-      : defaultTargetPlatform == TargetPlatform.android
-      ? 'http://10.0.2.2:5001'
-      : 'http://localhost:5001';
+  final url = resolveApiBaseUrl(
+    configuredUrl: configuredUrl,
+    isWeb: kIsWeb,
+    nativeDefaultUrl: defaultTargetPlatform == TargetPlatform.android
+        ? 'http://100.112.112.84:5001'
+        : 'http://localhost:5001',
+  );
   runApp(
     SmartifyApp(
       foodRepository: HttpFoodRepository(
