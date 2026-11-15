@@ -18,8 +18,6 @@ FoodItem food(String name, FoodPriority priority) => FoodItem(
           : 0,
     ),
   ),
-  status: FoodStatus.inStock,
-  quantity: '1',
   price: 0,
   category: 'Produce',
 );

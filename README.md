@@ -1,50 +1,46 @@
-# smartify_refrigerator_demo
+# Smartify fridge frontend
 
-A new Flutter project.
+Flutter frontend for the Smartify fridge Flask backend.
 
-## Getting Started
+## Run
 
-This project is a starting point for a Flutter application.
+Start the backend on port 5001, then run `flutter run` from this folder. The
+default backend address is `http://localhost:5001` on web, desktop, and the iOS
+simulator, and `http://10.0.2.2:5001` on the Android emulator. For a physical
+device, use your computer's LAN address:
 
-A few resources to get you started if this is your first Flutter project:
+```
+flutter run --dart-define=SMARTIFY_API_URL=http://192.168.1.10:5001
+```
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+Replace the example address with the computer running Flask. New manually added
+food goes on the first existing shelf. If there is no shelf, the app creates a
+`Fridge` shelf. Set a specific shelf when there are several:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```
+flutter run --dart-define=SMARTIFY_API_URL=http://192.168.1.10:5001 --dart-define=SMARTIFY_SHELF_ID=2
+```
 
-## Food data access
+## Inventory data
 
-The inventory uses `FoodRepository` (`lib/repositories/food_repository.dart`):
-`getFoods`, `getFood(id)`, `addFood`, `updateFood`, and `deleteFood(id)`.
-All return Futures so a future HTTP implementation can use the same interface.
-Pass a repository to `SmartifyApp(foodRepository: repository)` to replace the
-source without changing the screens. Food ids identify records independently
-of their names.
+The app reads active items from `GET /items`. The backend's `status` describes
+freshness (`safe`, `expiring_soon`, `expired`, `unknown`), and its `expires_at`
+drives urgency. Adding food calls `POST /item`. Removing an item calls
+`POST /item/<id>/remove`; Undo calls `POST /item/<id>/restore`. The backend's
+`removed_at` field is the source of truth for whether an item remains in
+inventory. The app refreshes inventory when navigating between tabs. The
+Accounting outcomes are saved by the backend in the same request that removes
+an item. The frontend reads `GET /accounting/events` on refresh and groups
+records into this week, previous week, this month, and previous month. Undo
+restores the item and voids its outcome. A consumed item counts as saved only
+if it was in Use First when marked consumed. Its price is snapshotted at that
+moment; other consumed items add no saved value. Shopping plans remain local to
+the current app session.
 
-The default `InMemoryFoodRepository` contains sample foods and does not persist
-changes across restarts. No database or API connection is configured. The UI
-loads foods through the repository and routes add, remove, and undo through it.
-Food records contain `id`, `name`, `storedAt` (stored_at), `status`,
-`quantity`, `price`, and `category`. The Add food dialog defaults `storedAt`
-to the current date and lets you choose an earlier date, price, and
-category. The id is generated when the food is added.
+The backend does not expose quantity, so backend items display the frontend's
+default `1 item` quantity. It sets `stored_at` when a manual item is created.
 
-`status` is an accounting lifecycle: `inStock`, `consumed`, or `discarded`.
-Consumed and discarded items leave inventory but remain in the repository.
-Accounting sums consumed prices as saved from waste and discarded prices as
-wasted; the in-memory demo resets these totals on restart.
+`SmartifyApp(foodRepository: ...)` still accepts a repository for tests and
+previews. `InMemoryFoodRepository` provides the sample data in widget tests.
 
-Inventory uses `InventoryPriority` to sort by a 0–100 score (highest first).
-Estimated shelf life is 3 days for Meat, 5 for Produce, 7 for Dairy, and 14
-for Other. Elapsed shelf life scores 100, one day remaining scores at least
-85, and older items score more than newer ones. Price adds up to 10 points.
-Equal scores sort by older storage date, then id. These are rough estimates
-until a real expiry date is available; quantity is displayed but is not parsed
-into the score because it is free text.
-Recipe suggestions use the active inventory; accounting totals use recorded outcomes.
-
-Run checks with `flutter test` and `flutter analyze`.
+Run checks with `flutter analyze` and `flutter test`.

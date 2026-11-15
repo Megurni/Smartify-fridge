@@ -4,22 +4,29 @@ import 'food_item.dart';
 class InventoryPriority {
   static int shelfLifeDays(String category) => switch (category.toLowerCase()) {
     'meat' => 3,
-    'produce' => 5,
+    'produce' || 'fruit' || 'vegetable' => 5,
     'dairy' => 7,
     _ => 14,
   };
 
   static int daysLeft(FoodItem food, DateTime now) {
+    if (food.expiresAt case final expiresAt?) {
+      return expiresAt.difference(now).inDays;
+    }
+    if (food.shelfId != null) return 999;
     final age = now.difference(food.storedAt).inDays;
     return shelfLifeDays(food.category) - (age < 0 ? 0 : age);
   }
 
-  /// Higher scores appear first. This is independent of accounting status.
+  /// Higher scores appear first.
   static int score(FoodItem food, DateTime now) {
+    if (food.shelfId != null && food.expiresAt == null) return 0;
     final remaining = daysLeft(food, now);
     if (remaining <= 0) return 100;
 
-    final life = shelfLifeDays(food.category);
+    final life = food.expiresAt == null
+        ? shelfLifeDays(food.category)
+        : food.expiresAt!.difference(food.storedAt).inDays.clamp(1, 36500);
     final priceScore = food.price.clamp(0, 10).round();
     if (remaining == 1) return (85 + priceScore).clamp(0, 99);
     if (remaining <= 3) {
@@ -38,7 +45,9 @@ class InventoryPriority {
 
   static List<FoodItem> sorted(Iterable<FoodItem> foods, DateTime now) {
     final result = foods
-        .where((food) => food.status == FoodStatus.inStock)
+        .where(
+          (food) => food.status == FoodStatus.inStock && food.removedAt == null,
+        )
         .toList();
     result.sort((a, b) {
       final byScore = score(b, now).compareTo(score(a, now));

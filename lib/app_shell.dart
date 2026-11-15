@@ -1,9 +1,14 @@
 part of 'main.dart';
 
 class SmartifyApp extends StatelessWidget {
-  const SmartifyApp({super.key, this.foodRepository});
+  const SmartifyApp({
+    super.key,
+    this.foodRepository,
+    this.inventoryReviewStore,
+  });
 
   final FoodRepository? foodRepository;
+  final InventoryReviewStore? inventoryReviewStore;
 
   @override
   Widget build(BuildContext context) {
@@ -26,21 +31,30 @@ class SmartifyApp extends StatelessWidget {
           margin: EdgeInsets.zero,
         ),
       ),
-      home: SmartifyShell(foodRepository: foodRepository),
+      home: SmartifyShell(
+        foodRepository: foodRepository,
+        inventoryReviewStore: inventoryReviewStore,
+      ),
     );
   }
 }
 
 class SmartifyShell extends StatefulWidget {
-  const SmartifyShell({super.key, this.foodRepository});
+  const SmartifyShell({
+    super.key,
+    this.foodRepository,
+    this.inventoryReviewStore,
+  });
 
   final FoodRepository? foodRepository;
+  final InventoryReviewStore? inventoryReviewStore;
 
   @override
   State<SmartifyShell> createState() => _SmartifyShellState();
 }
 
-class _SmartifyShellState extends State<SmartifyShell> {
+class _SmartifyShellState extends State<SmartifyShell>
+    with WidgetsBindingObserver {
   int _selectedIndex = 0;
   late final FoodRepository _repository;
   List<FoodItem> _foods = [];
@@ -48,29 +62,155 @@ class _SmartifyShellState extends State<SmartifyShell> {
   bool _loading = true;
   bool _busy = false;
   String? _loadError;
+  final Set<String> _reviewedItems = {};
+  Timer? _inventoryCheckTimer;
+  bool _reviewOpen = false;
+  final Set<String> _deferredReviewItems = {};
+  bool _checkingInventory = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _repository = widget.foodRepository ?? InMemoryFoodRepository();
-    _loadFoods();
+    _initialize();
   }
 
-  Future<void> _loadFoods() async {
-    setState(() {
-      _loading = true;
-      _loadError = null;
-    });
+  Future<void> _initialize() async {
+    _inventoryCheckTimer?.cancel();
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _loadError = null;
+      });
+    }
     try {
-      final foods = await _repository.getFoods();
-      if (mounted) setState(() => _foods = foods);
+      if (widget.inventoryReviewStore case final store?) {
+        _reviewedItems.addAll(await store.load());
+      }
     } catch (_) {
       if (mounted) {
+        setState(() {
+          _loading = false;
+          _loadError = 'Could not load saved inventory review.';
+        });
+      }
+      return;
+    }
+    if (!mounted) return;
+    await _loadFoods();
+    if (widget.inventoryReviewStore != null) {
+      _inventoryCheckTimer = Timer.periodic(
+        const Duration(seconds: 15),
+        (_) => _checkForNewFoods(),
+      );
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _checkForNewFoods();
+  }
+
+  @override
+  void dispose() {
+    _inventoryCheckTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  void _checkForNewFoods() {
+    if (!mounted || _busy || _checkingInventory || _reviewOpen) return;
+    _loadFoods(showLoading: false);
+  }
+
+  void _showPendingReview() {
+    _deferredReviewItems.clear();
+    _maybeReviewFoods(_foods);
+  }
+
+  Future<void> _loadFoods({bool showLoading = true}) async {
+    if (_checkingInventory) return;
+    _checkingInventory = true;
+    if (showLoading) {
+      setState(() {
+        _loading = true;
+        _loadError = null;
+      });
+    }
+    try {
+      final foods = await _repository.getFoods();
+      if (mounted) {
+        setState(() => _foods = foods);
+        _maybeReviewFoods(foods);
+      }
+    } catch (_) {
+      if (mounted && showLoading) {
         setState(() => _loadError = 'Could not load foods. Please retry.');
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      _checkingInventory = false;
+      if (mounted && showLoading) setState(() => _loading = false);
     }
+  }
+
+  String _reviewKey(FoodItem food) =>
+      '${food.id}:${food.storedAt.toIso8601String()}';
+
+  void _maybeReviewFoods(List<FoodItem> foods) {
+    if (widget.inventoryReviewStore == null ||
+        _reviewOpen ||
+        ModalRoute.of(context)?.isCurrent == false) {
+      return;
+    }
+    final pending = foods
+        .where((food) => food.status == FoodStatus.inStock)
+        .where((food) => !_reviewedItems.contains(_reviewKey(food)))
+        .where((food) => !_deferredReviewItems.contains(_reviewKey(food)))
+        .toList();
+    if (pending.isEmpty) return;
+    _reviewOpen = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      if (ModalRoute.of(context)?.isCurrent == false) {
+        _reviewOpen = false;
+        return;
+      }
+      final confirmed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => InventoryReviewPage(
+            foods: pending,
+            onConfirm: (edits) async {
+              for (final edit in edits) {
+                final original = pending.firstWhere(
+                  (food) => food.id == edit.id,
+                );
+                if (original.name != edit.name ||
+                    original.price != edit.price ||
+                    original.category != edit.category) {
+                  await _repository.updateFoodDetails(
+                    edit.id,
+                    name: edit.name,
+                    price: edit.price,
+                    category: edit.category,
+                  );
+                }
+              }
+              final updated = {..._reviewedItems, ...pending.map(_reviewKey)};
+              await widget.inventoryReviewStore!.save(updated);
+              _reviewedItems
+                ..clear()
+                ..addAll(updated);
+            },
+          ),
+        ),
+      );
+      _reviewOpen = false;
+      if (confirmed != true) {
+        _deferredReviewItems.addAll(pending.map(_reviewKey));
+      }
+      if (mounted && confirmed == true) _loadFoods(showLoading: false);
+    });
   }
 
   Future<void> _changeFoods(
@@ -114,7 +254,19 @@ class _SmartifyShellState extends State<SmartifyShell> {
       () async {
         final current = await _repository.getFood(food.id);
         if (current == null || current.status != FoodStatus.inStock) return;
-        await _repository.updateFood(current.copyWith(status: outcome));
+        final wasUseFirst =
+            outcome == FoodStatus.consumed &&
+            InventoryPriority.priority(current, DateTime.now()) ==
+                FoodPriority.first;
+        final savedAmount = wasUseFirst ? current.price : 0.0;
+        await _repository.updateFood(
+          current.copyWith(
+            status: outcome,
+            savedAmount: savedAmount,
+            wasUseFirst: wasUseFirst,
+            outcomeAt: DateTime.now(),
+          ),
+        );
       },
       '${food.name} marked as ${outcome.name}',
       undo: () => _changeFoods(
@@ -124,26 +276,60 @@ class _SmartifyShellState extends State<SmartifyShell> {
     );
   }
 
+  Future<void> _editFood(FoodItem food) async {
+    if (_busy || _reviewOpen) return;
+    _reviewOpen = true;
+    try {
+      final confirmed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => InventoryReviewPage(
+            foods: [food],
+            isEditing: true,
+            onConfirm: (edits) async {
+              final edit = edits.single;
+              await _repository.updateFoodDetails(
+                food.id,
+                name: edit.name,
+                price: edit.price,
+                category: edit.category,
+              );
+              if (widget.inventoryReviewStore case final store?) {
+                final reviewed = {..._reviewedItems, _reviewKey(food)};
+                await store.save(reviewed);
+                _reviewedItems
+                  ..clear()
+                  ..addAll(reviewed);
+              }
+            },
+          ),
+        ),
+      );
+      if (mounted && confirmed == true) {
+        await _loadFoods(showLoading: false);
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Food updated')));
+        }
+      }
+    } finally {
+      _reviewOpen = false;
+    }
+  }
+
   Future<void> _addFood() async {
     final entry =
-        await showDialog<
-          ({
-            String name,
-            DateTime storedAt,
-            String quantity,
-            double price,
-            String category,
-          })
-        >(context: context, builder: (_) => const _AddFoodDialog());
+        await showDialog<({String name, double price, String category})>(
+          context: context,
+          builder: (_) => const _AddFoodDialog(),
+        );
 
     if (entry == null || !mounted) return;
 
     final food = FoodItem(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       name: entry.name,
-      storedAt: entry.storedAt,
-      status: FoodStatus.inStock,
-      quantity: entry.quantity,
+      storedAt: DateTime.now(),
       price: entry.price,
       category: entry.category,
     );
@@ -164,7 +350,16 @@ class _SmartifyShellState extends State<SmartifyShell> {
         onViewInventory: () => setState(() => _selectedIndex = 1),
         onViewRecipes: () => setState(() => _selectedIndex = 2),
       ),
-      InventoryPage(foods: activeFoods, onRemove: _removeFood),
+      InventoryPage(
+        foods: activeFoods,
+        onRemove: _removeFood,
+        onEdit: _editFood,
+        pendingReviewCount: _foods
+            .where((food) => food.status == FoodStatus.inStock)
+            .where((food) => !_reviewedItems.contains(_reviewKey(food)))
+            .length,
+        onReviewPending: _showPendingReview,
+      ),
       RecipesPage(
         foods: activeFoods,
         active: _selectedIndex == 2,
@@ -196,7 +391,7 @@ class _SmartifyShellState extends State<SmartifyShell> {
                   children: [
                     Text(_loadError!),
                     TextButton(
-                      onPressed: _loadFoods,
+                      onPressed: _initialize,
                       child: const Text('Retry'),
                     ),
                   ],
@@ -215,8 +410,10 @@ class _SmartifyShellState extends State<SmartifyShell> {
           : null,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
-        onDestinationSelected: (index) =>
-            setState(() => _selectedIndex = index),
+        onDestinationSelected: (index) {
+          setState(() => _selectedIndex = index);
+          if (!_busy) _loadFoods(showLoading: false);
+        },
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
@@ -258,16 +455,13 @@ class _AddFoodDialog extends StatefulWidget {
 
 class _AddFoodDialogState extends State<_AddFoodDialog> {
   final _name = TextEditingController();
-  final _quantity = TextEditingController(text: '1 item');
   final _price = TextEditingController(text: '0.00');
   final _formKey = GlobalKey<FormState>();
-  DateTime _storedAt = DateTime.now();
   String _category = 'Other';
 
   @override
   void dispose() {
     _name.dispose();
-    _quantity.dispose();
     _price.dispose();
     super.dispose();
   }
@@ -277,9 +471,7 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
 
     Navigator.pop(context, (
       name: _name.text.trim(),
-      quantity: _quantity.text.trim(),
       price: double.parse(_price.text.trim()),
-      storedAt: _storedAt,
       category: _category,
     ));
   }
@@ -316,22 +508,6 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
-                  controller: _quantity,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    labelText: 'Quantity',
-                    hintText: 'e.g. 3 pieces or 500 g',
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Enter a quantity';
-                    }
-
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
                   controller: _price,
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
@@ -340,7 +516,7 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                   decoration: const InputDecoration(
                     labelText: 'Total price',
                     prefixText: '\$ ',
-                    helperText: 'Price for the entire quantity entered above.',
+                    helperText: 'Price of this food item.',
                   ),
                   validator: (value) {
                     final text = value?.trim() ?? '';
@@ -360,35 +536,33 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                 DropdownButtonFormField<String>(
                   initialValue: _category,
                   decoration: const InputDecoration(labelText: 'Category'),
-                  items: const ['Produce', 'Meat', 'Dairy', 'Other']
-                      .map(
-                        (category) => DropdownMenuItem(
-                          value: category,
-                          child: Text(category),
-                        ),
-                      )
-                      .toList(),
+                  items:
+                      const [
+                            'Meat',
+                            'Seafood',
+                            'Dairy',
+                            'Eggs',
+                            'Fruit',
+                            'Vegetable',
+                            'Bakery',
+                            'Leftovers',
+                            'Beverage',
+                            'Condiment',
+                            'Other',
+                          ]
+                          .map(
+                            (category) => DropdownMenuItem(
+                              value: category,
+                              child: Text(category),
+                            ),
+                          )
+                          .toList(),
                   onChanged: (value) =>
                       setState(() => _category = value ?? 'Other'),
                 ),
                 const SizedBox(height: 16),
-                TextButton.icon(
-                  onPressed: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: _storedAt,
-                      firstDate: DateTime(2000),
-                      lastDate: DateTime.now(),
-                    );
-                    if (date != null) setState(() => _storedAt = date);
-                  },
-                  icon: const Icon(Icons.calendar_today_outlined),
-                  label: Text(
-                    'Stored at: ${_storedAt.year}-${_storedAt.month.toString().padLeft(2, '0')}-${_storedAt.day.toString().padLeft(2, '0')}',
-                  ),
-                ),
                 const Text(
-                  'Priority is estimated from storage age, category and price.',
+                  'Priority uses the expiry date and price.',
                   style: TextStyle(fontSize: 12, color: Color(0xFF58645C)),
                 ),
               ],

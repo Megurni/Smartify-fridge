@@ -1,10 +1,20 @@
 part of '../main.dart';
 
 class InventoryPage extends StatefulWidget {
-  const InventoryPage({super.key, required this.foods, required this.onRemove});
+  const InventoryPage({
+    super.key,
+    required this.foods,
+    required this.onRemove,
+    required this.onEdit,
+    this.pendingReviewCount = 0,
+    this.onReviewPending,
+  });
 
   final List<FoodItem> foods;
   final void Function(FoodItem food, FoodStatus outcome) onRemove;
+  final ValueChanged<FoodItem> onEdit;
+  final int pendingReviewCount;
+  final VoidCallback? onReviewPending;
 
   @override
   State<InventoryPage> createState() => _InventoryPageState();
@@ -28,6 +38,21 @@ class _InventoryPageState extends State<InventoryPage> {
           title: 'My refrigerator',
           subtitle: 'Sorted by priority score • tap an item for details',
         ),
+        if (widget.pendingReviewCount > 0 && widget.onReviewPending != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+            child: Card(
+              child: ListTile(
+                leading: const Icon(Icons.fact_check_outlined),
+                title: Text(
+                  '${widget.pendingReviewCount} ${widget.pendingReviewCount == 1 ? 'item' : 'items'} to review',
+                ),
+                subtitle: const Text('Check details and save your inventory'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: widget.onReviewPending,
+              ),
+            ),
+          ),
         SizedBox(
           height: 44,
           child: ListView(
@@ -110,6 +135,18 @@ class _InventoryPageState extends State<InventoryPage> {
               'Priority score: ${InventoryPriority.score(food, DateTime.now())}/100',
             ),
             const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  widget.onEdit(food);
+                },
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Edit'),
+              ),
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(

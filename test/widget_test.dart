@@ -43,6 +43,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('No food in your refrigerator yet'), findsOneWidget);
     expect(find.text('0 items in your refrigerator'), findsOneWidget);
+    await tester.tap(find.text('Accounting'));
+    await tester.pumpAndSettle();
+    expect(find.text('Items consumed'), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
   });
   testWidgets('inventory and home order foods by priority score', (
     tester,
@@ -57,8 +61,6 @@ void main() {
         id: 'later',
         name: 'Carrots',
         storedAt: now,
-        status: FoodStatus.inStock,
-        quantity: '1 bag',
         price: 1,
         category: 'Produce',
       ),
@@ -66,8 +68,6 @@ void main() {
         id: 'soon',
         name: 'Yogurt',
         storedAt: now.subtract(const Duration(days: 3)),
-        status: FoodStatus.inStock,
-        quantity: '1 cup',
         price: 1,
         category: 'Dairy',
       ),
@@ -75,8 +75,6 @@ void main() {
         id: 'first',
         name: 'Milk',
         storedAt: now.subtract(const Duration(days: 6)),
-        status: FoodStatus.inStock,
-        quantity: '1 carton',
         price: 1,
         category: 'Dairy',
       ),
@@ -108,25 +106,80 @@ void main() {
     expect(visibleFoodNames(), ['Milk', 'Yogurt', 'Carrots', 'Tomatoes']);
   });
 
-  testWidgets('accounting totals consumed as saved and discarded as wasted', (
+  testWidgets('only Use First food earns savings when consumed', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final now = DateTime.now();
+    final repository = InMemoryFoodRepository(
+      initialFoods: [
+        FoodItem(
+          id: 'urgent',
+          name: 'Urgent milk',
+          storedAt: now,
+          price: 8,
+          category: 'Dairy',
+          expiresAt: now.add(const Duration(hours: 12)),
+        ),
+        FoodItem(
+          id: 'later',
+          name: 'Fresh milk',
+          storedAt: now,
+          price: 4,
+          category: 'Dairy',
+          expiresAt: now.add(const Duration(days: 7)),
+        ),
+      ],
+    );
+    await tester.pumpWidget(SmartifyApp(foodRepository: repository));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Inventory').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Urgent milk'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Consumed'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Fresh milk'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Consumed'));
+    await tester.pumpAndSettle();
+
+    expect((await repository.getFood('urgent'))!.savedAmount, 8);
+    expect((await repository.getFood('later'))!.savedAmount, 0);
+    await tester.tap(find.text('Accounting'));
+    await tester.pumpAndSettle();
+    expect(find.text('\$8.00'), findsOneWidget);
+    expect(find.text('100%'), findsOneWidget);
+  });
+
+  testWidgets('accounting ring compares saved and wasted amounts', (
     tester,
   ) async {
     final now = DateTime.now();
-    FoodItem item(String id, FoodStatus status, double price) => FoodItem(
+    FoodItem item(
+      String id,
+      FoodStatus status,
+      double price, {
+      double savedAmount = 0,
+    }) => FoodItem(
       id: id,
       name: id,
       storedAt: now,
       status: status,
-      quantity: '1',
       price: price,
       category: 'Other',
+      savedAmount: savedAmount,
     );
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: InsightsPage(
             foods: [
-              item('used', FoodStatus.consumed, 5),
+              item('used', FoodStatus.consumed, 5, savedAmount: 5),
+              item('notUrgent', FoodStatus.consumed, 4),
               item('waste', FoodStatus.discarded, 2.40),
               item('stock', FoodStatus.inStock, 3),
             ],
@@ -135,7 +188,8 @@ void main() {
       ),
     );
     expect(find.text('\$5.00'), findsOneWidget);
-    expect(find.text('Wasted: \$2.40'), findsOneWidget);
+    expect(find.text('\$2.40'), findsOneWidget);
+    expect(find.text('68%'), findsOneWidget);
     expect(find.text('Items consumed'), findsOneWidget);
     expect(find.text('Items discarded'), findsOneWidget);
   });

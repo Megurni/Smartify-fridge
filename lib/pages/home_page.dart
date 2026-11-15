@@ -20,10 +20,13 @@ class HomePage extends StatelessWidget {
     final urgent = sorted
         .where((food) => food.priority == FoodPriority.first)
         .toList();
-    final saved = allFoods
+    final thisWeek = allFoods.where(
+      (food) => AccountingPeriod.thisWeek.contains(food, DateTime.now()),
+    );
+    final saved = thisWeek
         .where((food) => food.status == FoodStatus.consumed)
-        .fold<double>(0, (total, food) => total + food.price);
-    final wasted = allFoods
+        .fold<double>(0, (total, food) => total + food.savedAmount);
+    final wasted = thisWeek
         .where((food) => food.status == FoodStatus.discarded)
         .fold<double>(0, (total, food) => total + food.price);
     return CustomScrollView(
@@ -63,7 +66,7 @@ class HomePage extends StatelessWidget {
               const SizedBox(height: 12),
               _RecipeSpotlight(onTap: onViewRecipes),
               const SizedBox(height: 24),
-              const _SectionTitle(title: 'Food accounting'),
+              const _SectionTitle(title: 'Food accounting · This week'),
               const SizedBox(height: 12),
               Row(
                 children: [

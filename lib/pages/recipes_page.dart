@@ -1,8 +1,13 @@
 part of '../main.dart';
 
 class RecipesPage extends StatefulWidget {
-  const RecipesPage({super.key, required this.foods, this.active = true,
-    this.plannedIds = const {}, this.onPlan});
+  const RecipesPage({
+    super.key,
+    required this.foods,
+    this.active = true,
+    this.plannedIds = const {},
+    this.onPlan,
+  });
 
   final List<FoodItem> foods;
   final bool active;
@@ -103,12 +108,18 @@ class _RecipesPageState extends State<RecipesPage> {
     setState(() {
       _loading = true;
       _error = null;
+      _matches = [];
     });
 
     try {
       final matches = await _repository.recommend(
         widget.foods,
         ingredient: _selectedIngredient,
+        onPartial: (matches) {
+          if (mounted && request == _request) {
+            setState(() => _matches = matches);
+          }
+        },
       );
 
       // Ignore older requests if the user switches filters quickly.
@@ -253,12 +264,12 @@ class _RecipesPageState extends State<RecipesPage> {
                 style: TextStyle(color: Colors.grey.shade600, height: 1.4),
               ),
               const SizedBox(height: 16),
-              if (_loading)
+              if (_loading && visibleMatches.isEmpty)
                 const Padding(
                   padding: EdgeInsets.all(40),
                   child: Center(child: CircularProgressIndicator()),
                 )
-              else if (_error != null)
+              else if (_error != null && visibleMatches.isEmpty)
                 _messageCard(
                   icon: Icons.wifi_off_rounded,
                   message: _error!,
@@ -294,10 +305,16 @@ class _RecipesPageState extends State<RecipesPage> {
                     child: _RecipeCard(
                       match: match,
                       planned: widget.plannedIds.contains(match.recipe.id),
-                      onPlan: widget.onPlan == null ? null
+                      onPlan: widget.onPlan == null
+                          ? null
                           : () => widget.onPlan!(match.recipe),
                     ),
                   ),
+              if (_loading && visibleMatches.isNotEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
               const SizedBox(height: 12),
               const Text(
                 'Recipes and photos: TheMealDB\n'

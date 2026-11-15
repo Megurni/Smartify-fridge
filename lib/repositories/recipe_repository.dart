@@ -57,6 +57,7 @@ class RecipeRepository {
   Future<List<RecipeMatch>> recommend(
     List<FoodItem> foods, {
     String? ingredient,
+    void Function(List<RecipeMatch>)? onPartial,
   }) async {
     if (foods.isEmpty) {
       return [];
@@ -123,6 +124,10 @@ class RecipeRepository {
         if (meals.isNotEmpty) {
           recipes.add(Recipe.fromJson(meals.first));
         }
+      }
+
+      if (recipes.isNotEmpty) {
+        onPartial?.call(rankRecipes(recipes, foods));
       }
     }
 
