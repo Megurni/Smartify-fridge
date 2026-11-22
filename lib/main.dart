@@ -1,3 +1,6 @@
+import 'repositories/shopping_plan_store.dart';
+import 'widgets/food_illustration.dart';
+import 'repositories/food_illustrations.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -42,6 +45,9 @@ void main() {
       foodRepository: HttpFoodRepository(
         baseUrl: url,
         shelfId: configuredShelfId > 0 ? configuredShelfId : null,
+      ),
+      shoppingPlanStore: ShoppingPlanStore(
+        namespace: '$url:${configuredShelfId > 0 ? configuredShelfId : 'all'}',
       ),
       inventoryReviewStore: InventoryReviewStore(
         namespace: '$url:${configuredShelfId > 0 ? configuredShelfId : 'all'}',

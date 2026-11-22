@@ -31,19 +31,7 @@ class InventoryReviewPage extends StatefulWidget {
 }
 
 class _InventoryReviewPageState extends State<InventoryReviewPage> {
-  static const _categories = [
-    'Meat',
-    'Seafood',
-    'Dairy',
-    'Eggs',
-    'Fruit',
-    'Vegetable',
-    'Bakery',
-    'Leftovers',
-    'Beverage',
-    'Condiment',
-    'Other',
-  ];
+  static final _categories = categoryIllustrations.keys.toList();
 
   final _form = GlobalKey<FormState>();
   late final List<_ReviewDraft> _drafts = widget.foods
@@ -111,6 +99,7 @@ class _InventoryReviewPageState extends State<InventoryReviewPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (widget.isEditing) FridgePhoto(url: draft.food.image),
                     Text(
                       'Item #${draft.food.id}',
                       style: Theme.of(context).textTheme.labelMedium,

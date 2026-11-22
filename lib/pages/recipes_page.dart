@@ -7,12 +7,14 @@ class RecipesPage extends StatefulWidget {
     this.active = true,
     this.plannedIds = const {},
     this.onPlan,
+    this.plan,
   });
 
   final List<FoodItem> foods;
   final bool active;
   final Set<String> plannedIds;
-  final ValueChanged<Recipe>? onPlan;
+  final void Function(Recipe, Set<String>)? onPlan;
+  final ShoppingPlan? plan;
 
   @override
   State<RecipesPage> createState() => _RecipesPageState();
@@ -304,10 +306,19 @@ class _RecipesPageState extends State<RecipesPage> {
                     padding: const EdgeInsets.only(bottom: 14),
                     child: _RecipeCard(
                       match: match,
+                      plan: widget.plan,
                       planned: widget.plannedIds.contains(match.recipe.id),
                       onPlan: widget.onPlan == null
                           ? null
-                          : () => widget.onPlan!(match.recipe),
+                          : () async {
+                              final owned = await showDialog<Set<String>>(
+                                context: context,
+                                builder: (_) =>
+                                    RecipeIngredientsDialog(match: match),
+                              );
+                              if (!mounted || owned == null) return;
+                              widget.onPlan!(match.recipe, owned);
+                            },
                     ),
                   ),
               if (_loading && visibleMatches.isNotEmpty)
@@ -405,8 +416,14 @@ class _RecipePhoto extends StatelessWidget {
 }
 
 class _RecipeCard extends StatelessWidget {
-  const _RecipeCard({required this.match, this.planned = false, this.onPlan});
+  const _RecipeCard({
+    required this.match,
+    this.planned = false,
+    this.onPlan,
+    this.plan,
+  });
 
+  final ShoppingPlan? plan;
   final bool planned;
   final VoidCallback? onPlan;
 
@@ -436,7 +453,7 @@ class _RecipeCard extends StatelessWidget {
       child: InkWell(
         onTap: () => showDialog<void>(
           context: context,
-          builder: (_) => _RecipeDetails(match: match),
+          builder: (_) => RecipeDetails(match: match, plan: plan),
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -567,74 +584,208 @@ class _IngredientBadge extends StatelessWidget {
   }
 }
 
-class _RecipeDetails extends StatelessWidget {
-  const _RecipeDetails({required this.match});
-
+class RecipeIngredientsDialog extends StatefulWidget {
+  const RecipeIngredientsDialog({super.key, required this.match});
   final RecipeMatch match;
+
+  @override
+  State<RecipeIngredientsDialog> createState() =>
+      _RecipeIngredientsDialogState();
+}
+
+class _RecipeIngredientsDialogState extends State<RecipeIngredientsDialog> {
+  late final Set<String> _owned = widget.match.available
+      .map((item) => ingredientKey(item.name))
+      .toSet();
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('What do you already have?'),
+    content: SizedBox(
+      width: 480,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.match.recipe.name,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Check ingredients you have in the quantity needed. Only unchecked ingredients go on your shopping list.',
+            ),
+            const SizedBox(height: 12),
+            for (final item in widget.match.recipe.ingredients)
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(item.name),
+                subtitle: Text(item.measure),
+                value: _owned.contains(ingredientKey(item.name)),
+                onChanged: (checked) => setState(() {
+                  final key = ingredientKey(item.name);
+                  checked == true ? _owned.add(key) : _owned.remove(key);
+                }),
+              ),
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.pop(context, Set<String>.of(_owned)),
+        child: const Text('Add to shopping list'),
+      ),
+    ],
+  );
+}
+
+class RecipeDetails extends StatelessWidget {
+  const RecipeDetails({super.key, required this.match, this.plan});
+  final RecipeMatch match;
+  final ShoppingPlan? plan;
 
   @override
   Widget build(BuildContext context) {
     final recipe = match.recipe;
+    bool have(RecipeIngredient item) =>
+        plan?.hasIngredient(
+          recipe,
+          item,
+          // The match already contains the current inventory; use it when no plan exists.
+          const [],
+        ) ??
+        match.available.contains(item);
+    final planned = plan?.recipes.any((item) => item.id == recipe.id) ?? false;
+    bool available(RecipeIngredient item) =>
+        planned ? have(item) : match.available.contains(item);
+    final owned = recipe.ingredients.where(available).toList();
+    final needed = recipe.ingredients
+        .where((item) => !available(item))
+        .toList();
 
+    Widget section(
+      String title,
+      List<RecipeIngredient> items,
+      Color color,
+      IconData icon,
+    ) => Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '$title (${items.length})',
+                  style: TextStyle(color: color, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (items.isEmpty)
+            Text(
+              title == 'Need to buy'
+                  ? 'You have everything!'
+                  : 'No ingredients yet.',
+            ),
+          for (final item in items)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Text(
+                '${item.measure} ${item.name}'.trim(),
+                style: const TextStyle(height: 1.4),
+              ),
+            ),
+        ],
+      ),
+    );
+    final instructions = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Center(child: _RecipePhoto(recipe.image, size: 180)),
+        const SizedBox(height: 20),
+        const Text(
+          'Instructions',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        SelectableText(
+          recipe.instructions.isEmpty
+              ? 'No instructions provided for this recipe.'
+              : recipe.instructions,
+          style: const TextStyle(height: 1.6),
+        ),
+        const SizedBox(height: 20),
+        const Text(
+          'Recipe and photo provided by TheMealDB.',
+          style: TextStyle(fontSize: 12, color: Colors.grey),
+        ),
+      ],
+    );
+    final ingredients = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Ingredient checklist',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        const Text('Check quantities before cooking.'),
+        const SizedBox(height: 16),
+        section(
+          'Already have',
+          owned,
+          const Color(0xFF28655A),
+          Icons.check_circle_outline,
+        ),
+        const SizedBox(height: 12),
+        section(
+          'Need to buy',
+          needed,
+          const Color(0xFF996019),
+          Icons.shopping_cart_outlined,
+        ),
+      ],
+    );
     return AlertDialog(
       title: Text(recipe.name),
       content: SizedBox(
-        width: 560,
+        width: 960,
         child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final size = constraints.maxWidth < 280
-                      ? constraints.maxWidth
-                      : 280.0;
-
-                  return Center(child: _RecipePhoto(recipe.image, size: size));
-                },
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Ingredients',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Have = matching name in your fridge. '
-                'Check the quantity needed.',
-              ),
-              const SizedBox(height: 12),
-              for (final item in recipe.ingredients)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 5),
-                  child: Text(
-                    '${match.available.contains(item) ? 'Have' : 'Need'}'
-                    ' · ${item.measure} ${item.name}',
-                    style: TextStyle(
-                      color: match.available.contains(item)
-                          ? const Color(0xFF28655A)
-                          : null,
-                    ),
+          child: LayoutBuilder(
+            builder: (context, constraints) => constraints.maxWidth >= 650
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 3, child: instructions),
+                      const SizedBox(width: 32),
+                      Expanded(flex: 2, child: ingredients),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ingredients,
+                      const SizedBox(height: 24),
+                      instructions,
+                    ],
                   ),
-                ),
-              const SizedBox(height: 20),
-              const Text(
-                'Instructions',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              SelectableText(
-                recipe.instructions.isEmpty
-                    ? 'No instructions provided for this recipe.'
-                    : recipe.instructions,
-                style: const TextStyle(height: 1.6),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Recipe and photo provided by TheMealDB.',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ],
           ),
         ),
       ),

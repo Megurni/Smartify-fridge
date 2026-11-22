@@ -115,7 +115,11 @@ class _InventoryPageState extends State<InventoryPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(food.emoji, style: const TextStyle(fontSize: 64)),
+            FoodIllustration(
+              name: food.name,
+              category: food.category,
+              size: 72,
+            ),
             const SizedBox(height: 8),
             Text(
               food.name,

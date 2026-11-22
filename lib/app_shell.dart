@@ -5,10 +5,12 @@ class SmartifyApp extends StatelessWidget {
     super.key,
     this.foodRepository,
     this.inventoryReviewStore,
+    this.shoppingPlanStore,
   });
 
   final FoodRepository? foodRepository;
   final InventoryReviewStore? inventoryReviewStore;
+  final ShoppingPlanStore? shoppingPlanStore;
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +36,7 @@ class SmartifyApp extends StatelessWidget {
       home: SmartifyShell(
         foodRepository: foodRepository,
         inventoryReviewStore: inventoryReviewStore,
+        shoppingPlanStore: shoppingPlanStore,
       ),
     );
   }
@@ -44,10 +47,12 @@ class SmartifyShell extends StatefulWidget {
     super.key,
     this.foodRepository,
     this.inventoryReviewStore,
+    this.shoppingPlanStore,
   });
 
   final FoodRepository? foodRepository;
   final InventoryReviewStore? inventoryReviewStore;
+  final ShoppingPlanStore? shoppingPlanStore;
 
   @override
   State<SmartifyShell> createState() => _SmartifyShellState();
@@ -58,7 +63,7 @@ class _SmartifyShellState extends State<SmartifyShell>
   int _selectedIndex = 0;
   late final FoodRepository _repository;
   List<FoodItem> _foods = [];
-  final _plan = ShoppingPlan();
+  var _plan = ShoppingPlan();
   bool _loading = true;
   bool _busy = false;
   String? _loadError;
@@ -85,6 +90,9 @@ class _SmartifyShellState extends State<SmartifyShell>
       });
     }
     try {
+      if (widget.shoppingPlanStore case final store?) {
+        _plan = await store.load();
+      }
       if (widget.inventoryReviewStore case final store?) {
         _reviewedItems.addAll(await store.load());
       }
@@ -92,7 +100,7 @@ class _SmartifyShellState extends State<SmartifyShell>
       if (mounted) {
         setState(() {
           _loading = false;
-          _loadError = 'Could not load saved inventory review.';
+          _loadError = 'Could not load saved app data. Please retry.';
         });
       }
       return;
@@ -105,6 +113,20 @@ class _SmartifyShellState extends State<SmartifyShell>
         (_) => _checkForNewFoods(),
       );
     }
+  }
+
+  void _saveShoppingPlan() {
+    final store = widget.shoppingPlanStore;
+    if (store == null) return;
+    store.save(_plan).catchError((Object error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Could not save shopping list on this device.'),
+          action: SnackBarAction(label: 'Retry', onPressed: _saveShoppingPlan),
+        ),
+      );
+    });
   }
 
   @override
@@ -126,7 +148,7 @@ class _SmartifyShellState extends State<SmartifyShell>
 
   void _showPendingReview() {
     _deferredReviewItems.clear();
-    _maybeReviewFoods(_foods);
+    _maybeReviewFoods(_foods, manual: true);
   }
 
   Future<void> _loadFoods({bool showLoading = true}) async {
@@ -157,8 +179,8 @@ class _SmartifyShellState extends State<SmartifyShell>
   String _reviewKey(FoodItem food) =>
       '${food.id}:${food.storedAt.toIso8601String()}';
 
-  void _maybeReviewFoods(List<FoodItem> foods) {
-    if (widget.inventoryReviewStore == null ||
+  void _maybeReviewFoods(List<FoodItem> foods, {bool manual = false}) {
+    if ((!manual && widget.inventoryReviewStore == null) ||
         _reviewOpen ||
         ModalRoute.of(context)?.isCurrent == false) {
       return;
@@ -197,7 +219,7 @@ class _SmartifyShellState extends State<SmartifyShell>
                 }
               }
               final updated = {..._reviewedItems, ...pending.map(_reviewKey)};
-              await widget.inventoryReviewStore!.save(updated);
+              await widget.inventoryReviewStore?.save(updated);
               _reviewedItems
                 ..clear()
                 ..addAll(updated);
@@ -211,6 +233,7 @@ class _SmartifyShellState extends State<SmartifyShell>
       }
       if (mounted && confirmed == true) _loadFoods(showLoading: false);
     });
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   Future<void> _changeFoods(
@@ -364,8 +387,12 @@ class _SmartifyShellState extends State<SmartifyShell>
         foods: activeFoods,
         active: _selectedIndex == 2,
         plannedIds: _plan.recipes.map((recipe) => recipe.id).toSet(),
-        onPlan: (recipe) {
-          setState(() => _plan.addRecipe(recipe, activeFoods));
+        plan: _plan,
+        onPlan: (recipe, owned) {
+          setState(
+            () => _plan.addRecipe(recipe, activeFoods, ownedIngredients: owned),
+          );
+          _saveShoppingPlan();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Recipe added to Shopping List')),
           );
@@ -375,7 +402,10 @@ class _SmartifyShellState extends State<SmartifyShell>
       ShoppingListPage(
         foods: _foods,
         plan: _plan,
-        onChanged: () => setState(() {}),
+        onChanged: () {
+          setState(() {});
+          _saveShoppingPlan();
+        },
       ),
     ];
 
@@ -536,27 +566,14 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                 DropdownButtonFormField<String>(
                   initialValue: _category,
                   decoration: const InputDecoration(labelText: 'Category'),
-                  items:
-                      const [
-                            'Meat',
-                            'Seafood',
-                            'Dairy',
-                            'Eggs',
-                            'Fruit',
-                            'Vegetable',
-                            'Bakery',
-                            'Leftovers',
-                            'Beverage',
-                            'Condiment',
-                            'Other',
-                          ]
-                          .map(
-                            (category) => DropdownMenuItem(
-                              value: category,
-                              child: Text(category),
-                            ),
-                          )
-                          .toList(),
+                  items: categoryIllustrations.keys
+                      .map(
+                        (category) => DropdownMenuItem(
+                          value: category,
+                          child: Text(category),
+                        ),
+                      )
+                      .toList(),
                   onChanged: (value) =>
                       setState(() => _category = value ?? 'Other'),
                 ),

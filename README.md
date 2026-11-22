@@ -47,8 +47,7 @@ an item. The frontend reads `GET /accounting/events` on refresh and groups
 records into this week, previous week, this month, and previous month. Undo
 restores the item and voids its outcome. A consumed item counts as saved only
 if it was in Use First when marked consumed. Its price is snapshotted at that
-moment; other consumed items add no saved value. Shopping plans remain local to
-the current app session.
+moment; other consumed items add no saved value. Shopping plans are saved on the current device/browser, separately for each API base and shelf.
 
 The backend does not expose quantity, so backend items display the frontend's
 default `1 item` quantity. It sets `stored_at` when a manual item is created.
@@ -57,3 +56,28 @@ default `1 item` quantity. It sets `stored_at` when a manual item is created.
 previews. `InMemoryFoodRepository` provides the sample data in widget tests.
 
 Run checks with `flutter analyze` and `flutter test`.
+
+## Recipe shopping checklist
+
+Want to Make opens an ingredient checklist, preselected from inventory names.
+Confirm the ingredients you already have in sufficient quantity; only unchecked
+items are added to Shopping List. Recipe details show instructions beside
+Already have / Need to buy (stacked on narrow screens). Marking an item purchased
+hides it from the active shopping list and updates its recipe checklist; Undo
+restores it. Purchases do not create inventory records. Plans, owned ingredients, manual shopping items and purchase state are saved locally after each change and restored when reopening the app. This does not sync across browsers/devices; clearing site data removes saved plans.
+
+## Inventory illustrations and edit photos
+
+Inventory tiles and the bottom sheet use Microsoft Fluent Emoji Flat (MIT;
+license in assets/food_icons/LICENSE.txt). All eleven category fallbacks and
+common ingredient illustrations are bundled. Other ingredient names use the
+Iconify search API restricted to fluent-emoji-flat; only exact normalized
+matches are accepted. Successful SVGs are cached in shared preferences. Missing
+matches, offline requests and image failures use the category illustration.
+
+Edit food shows the original shelf capture (not a per-item crop). The backend
+must return image_url as a path relative to the API base, e.g.
+"capture/7/image". The legacy image filesystem path is never loaded by the
+browser. Missing photos show a placeholder. The companion backend patch must
+be applied and deployed to the Pi before real captures can appear; the local
+sample-data preview has no fridge photos.

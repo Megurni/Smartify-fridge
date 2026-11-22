@@ -93,7 +93,11 @@ class FoodTile extends StatelessWidget {
                   color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Text(food.emoji, style: const TextStyle(fontSize: 29)),
+                child: FoodIllustration(
+                  name: food.name,
+                  category: food.category,
+                  size: 34,
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(

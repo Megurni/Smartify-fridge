@@ -33,6 +33,16 @@ class HttpFoodRepository implements FoodRepository {
 
   Uri _url(String path) => _baseUrl.resolve(path);
 
+  FoodItem _foodFromJson(Map<String, dynamic> data) {
+    final normalized = Map<String, dynamic>.of(data);
+    final path = data['image_url'];
+    // Only the explicit web URL is used; legacy image is a server filesystem path.
+    normalized['image'] = path is String && path.isNotEmpty
+        ? _baseUrl.resolve(path).toString()
+        : '';
+    return FoodItem.fromJson(normalized);
+  }
+
   Map<String, dynamic> _decode(http.Response response) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError(
@@ -58,7 +68,7 @@ class HttpFoodRepository implements FoodRepository {
     final data = _decode(await _client.get(_url('items')));
     final accounting = _decode(await _client.get(_url('accounting/events')));
     final active = (data['items'] as List<dynamic>)
-        .map((item) => FoodItem.fromJson(item as Map<String, dynamic>))
+        .map((item) => _foodFromJson(item as Map<String, dynamic>))
         .toList();
     final outcomes = (accounting['events'] as List<dynamic>)
         .map(
@@ -73,7 +83,7 @@ class HttpFoodRepository implements FoodRepository {
   Future<FoodItem?> getFood(String id) async {
     final response = await _client.get(_url('item/$id'));
     if (response.statusCode == 404) return null;
-    return FoodItem.fromJson(_decode(response));
+    return _foodFromJson(_decode(response));
   }
 
   Future<int> _shelfForNewFood() async {
@@ -197,10 +207,10 @@ List<FoodItem> _sampleFoods() {
   );
   return [
     sample('chicken', 'Chicken breast', 2, 8.50, 'Meat'),
-    sample('spinach', 'Baby spinach', 4, 4.20, 'Produce'),
-    sample('mushrooms', 'Mushrooms', 2, 3.80, 'Produce'),
+    sample('spinach', 'Baby spinach', 4, 4.20, 'Vegetable'),
+    sample('mushrooms', 'Mushrooms', 2, 3.80, 'Vegetable'),
     sample('yogurt', 'Greek yogurt', 2, 5.40, 'Dairy'),
-    sample('carrots', 'Carrots', 0, 2.60, 'Produce'),
-    sample('eggs', 'Eggs', 0, 4.90, 'Dairy'),
+    sample('carrots', 'Carrots', 0, 2.60, 'Vegetable'),
+    sample('eggs', 'Eggs', 0, 4.90, 'Eggs'),
   ];
 }
